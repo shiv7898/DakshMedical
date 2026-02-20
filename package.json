@@ -10,10 +10,17 @@
     "test": "jest"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
+    "@react-native/new-app-screen": "0.84.0",
+    "@react-navigation/bottom-tabs": "^7.14.0",
+    "@react-navigation/native": "^7.1.28",
+    "expo-font": "^14.0.11",
+    "lucide-react-native": "^0.574.0",
     "react": "19.2.3",
     "react-native": "0.84.0",
-    "@react-native/new-app-screen": "0.84.0",
-    "react-native-safe-area-context": "^5.5.2"
+    "react-native-safe-area-context": "^5.6.2",
+    "react-native-screens": "^4.23.0",
+    "react-native-vector-icons": "^10.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
