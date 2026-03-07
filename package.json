@@ -7,20 +7,29 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "npx patch-package"
   },
   "dependencies": {
-    "@expo/vector-icons": "^15.0.3",
+    "@react-native-documents/picker": "^12.0.1",
     "@react-native/new-app-screen": "0.84.0",
     "@react-navigation/bottom-tabs": "^7.14.0",
     "@react-navigation/native": "^7.1.28",
-    "expo-font": "^14.0.11",
+    "@react-navigation/native-stack": "^7.14.2",
     "lucide-react-native": "^0.574.0",
+    "papaparse": "^5.5.3",
     "react": "19.2.3",
     "react-native": "0.84.0",
+    "react-native-chart-kit": "^6.12.0",
+    "react-native-fs": "^2.20.0",
+    "react-native-html-to-pdf": "^1.3.0",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-screens": "^4.23.0",
-    "react-native-vector-icons": "^10.3.0"
+    "react-native-share": "^12.2.5",
+    "react-native-sqlite-storage": "^6.0.1",
+    "react-native-svg": "^15.15.3",
+    "react-native-vector-icons": "^10.3.0",
+    "react-native-view-shot": "^4.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

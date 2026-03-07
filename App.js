@@ -1,15 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import ButtonTab from './src/navigations/ButtonTab';
+import { StatusBar } from 'react-native';
+import MainNavigation from './src/navigations/MainNavigation';
+import { setupDatabase } from './src/api/database';
+import { Colors } from './src/styles/theme';
 
 const App = () => {
+  useEffect(() => {
+    setupDatabase();
+  }, []);
+
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <ButtonTab />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <NavigationContainer>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+      <MainNavigation />
+    </NavigationContainer>
   );
 };
 

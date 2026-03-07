@@ -1,203 +1,278 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, { useState, useEffect } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    SafeAreaView,
+    ScrollView,
+    TouchableOpacity,
+    TextInput,
+    ActivityIndicator,
+    Platform,
+    StatusBar,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Colors, Spacing, Typography } from '../styles/theme';
+import { getPatientInfo } from '../api/database';
 
-const ProfileScreen = () => {
+const ProfileScreen = ({ navigation }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [patient, setPatient] = useState(null);
+
+    useEffect(() => {
+        loadPatientData();
+    }, []);
+
+    const loadPatientData = async () => {
+        setLoading(true);
+        try {
+            const data = await getPatientInfo();
+            setPatient(data);
+        } catch (error) {
+            console.error('Failed to load patient data:', error);
+        }
+        setLoading(false);
+    };
+
+    const InfoCard = ({ label, value, icon, editable, keyboardType = 'default' }) => (
+        <View style={styles.infoCard}>
+            <View style={styles.infoIconBox}>
+                <Icon name={icon} size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.infoBody}>
+                <Text style={styles.infoLabel}>{label}</Text>
+                {isEditing && editable ? (
+                    <TextInput
+                        style={styles.infoInput}
+                        value={String(value || '')}
+                        onChangeText={(text) => setPatient({ ...patient, [editable]: text })}
+                        placeholder={`Enter ${label}`}
+                        keyboardType={keyboardType}
+                    />
+                ) : (
+                    <Text style={styles.infoValue}>{value || 'Not Set'}</Text>
+                )}
+            </View>
+        </View>
+    );
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Profile</Text>
-                <TouchableOpacity>
-                    <Icon name="settings" size={24} color="#1A1C1E" />
+                <Text style={styles.headerTitle}>Patient Profile</Text>
+                <TouchableOpacity onPress={() => setIsEditing(!isEditing)}>
+                    <Text style={styles.editAction}>{isEditing ? 'Cancel' : 'Update Info'}</Text>
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                {/* Profile Card */}
-                <View style={styles.profileCard}>
-                    <View style={styles.avatarContainer}>
-                        <View style={styles.avatar}>
-                            <Icon name="person" size={50} color="#0066FF" />
-                        </View>
-                        <View style={styles.badge}>
-                            <Icon name="verified" size={16} color="#FFFFFF" />
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                {/* Profile Header Card */}
+                <View style={styles.profileMainCard}>
+                    <View style={styles.avatarGlow}>
+                        <View style={styles.avatarFull}>
+                            <Icon name="account" size={50} color={Colors.primary} />
                         </View>
                     </View>
-                    <Text style={styles.name}>Shiv Kumar</Text>
-                    <Text style={styles.patientId}>ID: CPAP-2026-9901</Text>
-                    <View style={styles.tagGrid}>
-                        <View style={styles.tag}><Text style={styles.tagText}>28 / Male</Text></View>
-                        <View style={[styles.tag, { backgroundColor: '#E0F2F1' }]}><Text style={[styles.tagText, { color: '#00796B' }]}>Auto CPAP</Text></View>
+                    <Text style={styles.patientName}>{patient?.name}</Text>
+                    <Text style={styles.patientSub}>ID: {patient?.id || 'P-00000'}</Text>
+                </View>
+
+                <Text style={styles.sectionHeader}>Personal Information</Text>
+                <InfoCard label="Patient Name" value={patient?.name} icon="account-details" editable="name" />
+
+                <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                        <InfoCard label="Gender" value={patient?.gender} icon="gender-male-female" editable="gender" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                        <InfoCard label="DOB" value={patient?.dob} icon="calendar-outline" editable="dob" />
                     </View>
                 </View>
 
-                {/* Info Sections */}
-                <Section title="Health Information" icon="medical-services">
-                    <InfoItem label="Height" value="178 cm" />
-                    <InfoItem label="Weight" value="82 kg" />
-                    <InfoItem label="BMI" value="25.9 (Normal)" />
-                    <InfoItem label="Diagnosis" value="Moderate OSA" />
-                    <InfoItem label="Pressure Range" value="4.0 - 12.0 cmH2O" />
-                </Section>
+                <InfoCard label="Phone Number" value={patient?.phone} icon="phone-outline" editable="phone" keyboardType="phone-pad" />
+                <InfoCard label="Email Address" value={patient?.email} icon="email-outline" editable="email" keyboardType="email-address" />
+                <InfoCard label="Residential Address" value={patient?.address} icon="map-marker-outline" editable="address" />
 
-                <Section title="Device Information" icon="devices">
-                    <InfoItem label="Model" value="AirSense 11 Auto" />
-                    <InfoItem label="Serial No" value="AS11-9238-120" />
-                    <InfoItem label="Bluetooth" value="Connected" color="#4CAF50" />
-                    <InfoItem label="Last Sync" value="Today, 7:15 AM" />
-                </Section>
+                <Text style={styles.sectionHeader}>Device Monitoring</Text>
+                <InfoCard label="Device Model" value={patient?.device_model} icon="nasal-cannula" editable="device_model" />
+                <InfoCard label="Device Serial No (SN)" value={patient?.machine_serial} icon="barcode-scan" editable="machine_serial" />
 
-                <TouchableOpacity style={styles.logoutBtn}>
-                    <Icon name="logout" size={20} color="#EF5350" />
-                    <Text style={styles.logoutText}>Log Out</Text>
+                {isEditing && (
+                    <TouchableOpacity style={styles.saveBtn} onPress={() => setIsEditing(false)}>
+                        <Text style={styles.saveBtnText}>SAVE PROFILE</Text>
+                    </TouchableOpacity>
+                )}
+
+                <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
+                    <Icon name="logout-variant" size={20} color={Colors.error} />
+                    <Text style={styles.logoutText}>Logout Account</Text>
                 </TouchableOpacity>
 
-                <View style={{ height: 30 }} />
+                <View style={{ height: 40 }} />
             </ScrollView>
         </SafeAreaView>
     );
 };
 
-const Section = ({ title, icon, children }) => (
-    <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-            <Icon name={icon} size={20} color="#0066FF" />
-            <Text style={styles.sectionTitle}>{title}</Text>
-        </View>
-        {children}
-    </View>
-);
-
-const InfoItem = ({ label, value, color = '#1A1C1E' }) => (
-    <View style={styles.infoItem}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={[styles.infoValue, { color }]}>{value}</Text>
-    </View>
-);
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5F7FA',
+        backgroundColor: '#FFFFFF',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#FFFFFF',
+        paddingHorizontal: Spacing.xl,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
+        paddingBottom: Spacing.m,
+        backgroundColor: '#FFF',
     },
     headerTitle: {
-        fontSize: 20,
-        fontWeight: '800',
-        color: '#1A1C1E',
+        ...Typography.subheader,
+        fontSize: 18,
+    },
+    editAction: {
+        color: Colors.primary,
+        fontWeight: 'bold',
+        fontSize: 14,
     },
     scrollContent: {
-        padding: 20,
+        padding: Spacing.m,
     },
-    profileCard: {
-        backgroundColor: '#FFFFFF',
+    profileMainCard: {
+        backgroundColor: '#F8FBFF',
         borderRadius: 24,
         padding: 20,
         alignItems: 'center',
         marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#E3F2FD',
+    },
+    avatarGlow: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 10,
         elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
+        shadowColor: Colors.primary,
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
     },
-    avatarContainer: {
-        position: 'relative',
-        marginBottom: 15,
-    },
-    avatar: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+    avatarFull: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
         backgroundColor: '#F0F7FF',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    badge: {
-        position: 'absolute',
-        bottom: 5,
-        right: 5,
-        backgroundColor: '#0066FF',
-        padding: 4,
-        borderRadius: 10,
+    patientName: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.text,
     },
-    name: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: '#1A1C1E',
-    },
-    patientId: {
-        fontSize: 14,
-        color: '#7B8D9E',
-        marginTop: 4,
-    },
-    tagGrid: {
-        flexDirection: 'row',
-        marginTop: 15,
-    },
-    tag: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        backgroundColor: '#F0F2F5',
-        marginHorizontal: 4,
-    },
-    tagText: {
+    patientSub: {
         fontSize: 12,
-        fontWeight: '600',
-        color: '#1A1C1E',
-    },
-    section: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 20,
-        marginBottom: 15,
+        color: Colors.textSecondary,
+        marginTop: 2,
     },
     sectionHeader: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: Colors.primary,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: 10,
+        marginTop: 15,
+        marginLeft: 4,
+    },
+    infoCard: {
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        padding: 12,
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 15,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#F1F4F8',
     },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#1A1C1E',
-        marginLeft: 10,
+    infoIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        backgroundColor: '#F3F9FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
     },
-    infoItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F0F2F5',
+    infoBody: {
+        flex: 1,
     },
     infoLabel: {
-        fontSize: 14,
-        color: '#7B8D9E',
+        fontSize: 10,
+        color: Colors.textSecondary,
+        fontWeight: '600',
     },
     infoValue: {
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: 'bold',
+        color: Colors.text,
+        marginTop: 1,
+    },
+    infoInput: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: Colors.primary,
+        padding: 0,
+        marginTop: 1,
+    },
+    row: {
+        flexDirection: 'row',
+    },
+    saveBtn: {
+        backgroundColor: Colors.primary,
+        height: 50,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 20,
+        elevation: 4,
+    },
+    saveBtnText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        letterSpacing: 1,
     },
     logoutBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 15,
-        marginTop: 10,
+        marginTop: 30,
     },
     logoutText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#EF5350',
+        color: Colors.error,
+        fontWeight: 'bold',
         marginLeft: 10,
-    }
+    },
 });
 
 export default ProfileScreen;
