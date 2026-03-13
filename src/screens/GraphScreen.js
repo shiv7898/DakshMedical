@@ -20,6 +20,26 @@ const { width } = Dimensions.get('window');
 
 const GraphScreen = ({ navigation }) => {
     const [logs, setLogs] = useState([]);
+    const [tooltipPos, setTooltipPos] = useState({
+        visible: false,
+        x: 0,
+        y: 0,
+        value: 0,
+        chartIndex: -1
+    });
+
+    const handleDataPointClick = (data, chartIndex) => {
+        setTooltipPos({
+            visible: true,
+            x: data.x,
+            y: data.y,
+            value: data.value,
+            chartIndex
+        });
+        setTimeout(() => {
+            setTooltipPos(prev => ({ ...prev, visible: false }));
+        }, 3000);
+    };
 
     useFocusEffect(
         React.useCallback(() => {
@@ -56,6 +76,7 @@ const GraphScreen = ({ navigation }) => {
     }
 
     const reversedLogs = [...logs].slice(0, 7).reverse();
+    console.log('Reversed Logs:', reversedLogs);
     const dates = reversedLogs.map(l => l.date.split('-')[2]);
 
     return (
@@ -77,24 +98,28 @@ const GraphScreen = ({ navigation }) => {
                         <Icon name="gauge" size={18} color={Colors.primary} />
                         <Text style={styles.chartLabel}>Pressure vs Time</Text>
                     </View>
-                    <LineChart
-                        data={{
-                            labels: dates,
-                            datasets: [{
-                                data: reversedLogs.map(l => l.pressure_95th || 0),
-                                strokeDashArray: [5, 5] // "-- wala stroke"
-                            }]
-                        }}
-                        width={width - Spacing.m * 4}
-                        height={200}
-                        chartConfig={{
-                            ...chartConfig,
-                            propsForBackgroundLines: { strokeDasharray: "5,5" }
-                        }}
-                        bezier
-                        style={styles.chart}
-                        withInnerLines={true}
-                    />
+                    <View style={{ position: 'relative' }}>
+                        <LineChart
+                            data={{
+                                labels: dates,
+                                datasets: [{
+                                    data: reversedLogs.map(l => l.pressure_95th || 0),
+                                }]
+                            }}
+                            width={width - Spacing.m * 4}
+                            height={200}
+                            chartConfig={chartConfig}
+                            bezier
+                            style={styles.chart}
+                            withInnerLines={true}
+                            onDataPointClick={(data) => handleDataPointClick(data, 0)}
+                        />
+                        {tooltipPos.visible && tooltipPos.chartIndex === 0 && (
+                            <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
+                                <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
 
                 {/* 2. Flow vs Time Chart */}
@@ -103,18 +128,26 @@ const GraphScreen = ({ navigation }) => {
                         <Icon name="water-outline" size={18} color={Colors.secondary} />
                         <Text style={styles.chartLabel}>Flow vs Time</Text>
                     </View>
-                    <LineChart
-                        data={{
-                            labels: dates,
-                            datasets: [{ data: reversedLogs.map(l => l.usage_hours || 0) }]
-                        }}
-                        width={width - Spacing.m * 4}
-                        height={180}
-                        chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(0, 188, 212, ${opacity})` }}
-                        style={styles.chart}
-                        bezier
-                        withInnerLines={false}
-                    />
+                    <View style={{ position: 'relative' }}>
+                        <LineChart
+                            data={{
+                                labels: dates,
+                                datasets: [{ data: reversedLogs.map(l => l.usage_hours || 0) }]
+                            }}
+                            width={width - Spacing.m * 4}
+                            height={180}
+                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(0, 188, 212, ${opacity})` }}
+                            style={styles.chart}
+                            bezier
+                            withInnerLines={false}
+                            onDataPointClick={(data) => handleDataPointClick(data, 1)}
+                        />
+                        {tooltipPos.visible && tooltipPos.chartIndex === 1 && (
+                            <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
+                                <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
 
                 {/* 3. Last 7 Days (Mask Off, Apnea, High Leak) */}
@@ -123,23 +156,45 @@ const GraphScreen = ({ navigation }) => {
                         <Icon name="alert-circle-outline" size={18} color="#FFA726" />
                         <Text style={styles.chartLabel}>Last 7 Days (Apnea, Leak, Mask)</Text>
                     </View>
-                    <LineChart
-                        data={{
-                            labels: dates,
-                            legend: ['Apnea (AHI)', 'High Leak', 'Mask Off'],
-                            datasets: [
-                                { data: reversedLogs.map(l => l.ahi || 0), color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` }, // Red - Apnea
-                                { data: reversedLogs.map(l => l.leak_rate || 0), color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` }, // Orange - High Leak
-                                { data: reversedLogs.map(l => l.cai || 0), color: (opacity = 1) => `rgba(66, 165, 245, ${opacity})` }  // Blue - Mask Off
-                            ]
-                        }}
-                        width={width - Spacing.m * 4}
-                        height={220}
-                        chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(158, 158, 158, ${opacity})` }}
-                        style={styles.chart}
-                        bezier
-                        withInnerLines={true}
-                    />
+                    {/* Custom Legend with spacing */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 8, gap: 20 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(239, 83, 80, 1)', marginRight: 5 }} />
+                            <Text style={{ fontSize: 11, color: '#555' }}>Apnea(AHI)</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(255, 167, 38, 1)', marginRight: 5 }} />
+                            <Text style={{ fontSize: 11, color: '#555' }}>High Leak</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(66, 165, 245, 1)', marginRight: 5 }} />
+                            <Text style={{ fontSize: 11, color: '#555' }}>Mask Off</Text>
+                        </View>
+                    </View>
+                    <View style={{ position: 'relative' }}>
+                        <LineChart
+                            data={{
+                                labels: dates,
+                                datasets: [
+                                    { data: reversedLogs.map(l => l.ahi || 0), color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` },
+                                    { data: reversedLogs.map(l => l.leak_rate || 0), color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` },
+                                    { data: reversedLogs.map(l => l.cai || 0), color: (opacity = 1) => `rgba(66, 165, 245, ${opacity})` }
+                                ]
+                            }}
+                            width={width - Spacing.m * 4}
+                            height={220}
+                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(158, 158, 158, ${opacity})` }}
+                            style={styles.chart}
+                            bezier
+                            withInnerLines={true}
+                            onDataPointClick={(data) => handleDataPointClick(data, 2)}
+                        />
+                        {tooltipPos.visible && tooltipPos.chartIndex === 2 && (
+                            <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
+                                <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
 
                 <View style={{ height: 40 }} />
@@ -231,7 +286,29 @@ const styles = StyleSheet.create({
     backBtnText: {
         color: '#FFF',
         fontWeight: 'bold',
-    }
+    },
+    tooltipOverlay: {
+        position: 'absolute',
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        zIndex: 100, // Ensure it floats above the chart
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    tooltipText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '900',
+    },
 });
 
 export default GraphScreen;

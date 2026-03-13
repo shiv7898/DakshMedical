@@ -221,6 +221,13 @@ const ReportPreviewScreen = () => {
             <td>${patient?.device_model || '-'}</td>
             <td class="label">Device SN:</td>
             <td>${patient?.machine_serial || '-'}</td>
+         
+        </tr>
+        <tr>
+            <td class="label">Doctor Name:</td>
+            <td>${'-'}</td>
+            <td class="label">Doctor Phone:</td>
+            <td>${'-'}</td>
         </tr>
     </table>
 </div>

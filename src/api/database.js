@@ -15,6 +15,7 @@ export const setupDatabase = () => {
   db.transaction(tx => {
     // Force schema update because of missing columns like pressure_95th
     tx.executeSql('DROP TABLE IF EXISTS logs');
+    tx.executeSql('DROP TABLE IF EXISTS patients');
 
     tx.executeSql(
       'CREATE TABLE IF NOT EXISTS patients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER, gender TEXT, dob TEXT, address TEXT, phone TEXT, email TEXT, device_model TEXT, machine_serial TEXT)',
@@ -130,14 +131,15 @@ export const recreateLogsTableWithData = (logsArray) => {
       logsArray.forEach(logData => {
         tx.executeSql(
           `INSERT INTO logs 
-          (patient_id, date, usage_hours, ahi, leak_rate,
+          (patient_id, date, usage_hours, ahi, cai, leak_rate,
            pressure_min, pressure_max, pressure_avg, pressure_95th, machine_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             logData.patient_id ?? 1,
             logData.date,
             logData.usage_hours ?? 0,
             logData.ahi ?? 0,
+            logData.cai ?? 0,
             logData.leak_rate ?? 0,
             logData.pressure_min ?? 0,
             logData.pressure_max ?? 0,
@@ -215,23 +217,77 @@ export const getPatientInfo = () => {
           if (results.rows.length > 0) {
             resolve(results.rows.item(0));
           } else {
-            // Return comprehensive dummy patient for UI evaluation
-            resolve({
-              id: "P-78231",
-              name: 'Shiv Dhakad',
-              age: 32,
-              gender: 'Male',
-              dob: '12-Aug-1992',
-              address: '102, Medical Enclave, New Delhi',
-              phone: '+91 9876543210',
-              email: 'daksh.singh@example.com',
-              device_model: 'AirSense 11 AutoSet',
-              machine_serial: 'AS11-9238-120'
-            });
+            // Return null so profile form starts blank
+            resolve(null);
           }
         },
         (_, error) => reject(error)
       );
+    });
+  });
+};
+
+export const savePatientInfo = (patientData) => {
+  return new Promise((resolve, reject) => {
+    const params = [
+      patientData?.name || "",
+      patientData?.age || "",
+      patientData?.gender || "",
+      patientData?.dob || "",
+      patientData?.address || "",
+      patientData?.phone || "",
+      patientData?.email || "",
+      patientData?.device_model || "",
+      patientData?.machine_serial || ""
+    ];
+
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT id FROM patients LIMIT 1',
+        [],
+        (tx, results) => {
+          if (results.rows.length > 0) {
+            const id = results.rows.item(0).id;
+            tx.executeSql(
+              `UPDATE patients SET name=?, age=?, gender=?, dob=?, address=?, phone=?, email=?, device_model=?, machine_serial=? WHERE id=?`,
+              [...params, id],
+              (_tx, res) => resolve(res),
+              (_tx, err) => {
+                console.error("SQL UPDATE Error:", err);
+                reject(err || new Error("SQL UPDATE Error"));
+                return true;
+              }
+            );
+          } else {
+            tx.executeSql(
+              `INSERT INTO patients (name, age, gender, dob, address, phone, email, device_model, machine_serial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              params,
+              (_tx, res) => resolve(res),
+              (_tx, err) => {
+                console.error("SQL INSERT Error:", err);
+                reject(err || new Error("SQL INSERT Error"));
+                return true;
+              }
+            );
+          }
+        },
+        (_tx, err) => {
+          console.error("SQL SELECT Error:", err);
+          reject(err || new Error("SQL SELECT Error"));
+          return true;
+        }
+      );
+    }, (err) => {
+      console.error("DB Transaction Error:", err);
+      reject(err || new Error("DB Transaction Error"));
+    });
+  });
+};
+
+export const clearPatientInfo = () => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql('DELETE FROM patients', [], (_, res) => resolve(res), (_, err) => reject(err));
     });
   });
 };
