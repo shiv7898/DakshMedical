@@ -88,26 +88,33 @@ const ImportLogScreen = ({ route, navigation }) => {
                 summaryTitle,
                 summaryMsg,
                 [
-                    { text: 'View Report', onPress: () => navigation.navigate('Reports') },
+                    // { text: 'View Report', onPress: () => navigation.navigate('Reports') },
                     { text: 'Dashboard', onPress: () => navigation.navigate('MainTabs') }
                 ]
             );
         } catch (err) {
             setLoading(false);
-            const isCancelError = DocumentPicker.isCancel && DocumentPicker.isCancel(err);
+            
+            // Check for user cancellation in multiple ways
+            const isCancelError = 
+                (DocumentPicker.isCancel && DocumentPicker.isCancel(err)) ||
+                err?.code === 'DOCUMENT_PICKER_CANCELED' ||
+                err?.message?.toLowerCase()?.includes('cancel') ||
+                err?.message?.toLowerCase()?.includes('user canceled');
 
             if (isCancelError) {
                 console.log('User cancelled file picker');
-            } else {
-                console.error('CRITICAL IMPORT ERROR:', err);
-                const errorMsg = err?.message || (typeof err === 'string' ? err : 'Internal Data Error');
-
-                Alert.alert(
-                    'Import Failed',
-                    `Database Error: ${errorMsg}\n\nTry clicking "Setup Database" in settings if the problem persists.`,
-                    [{ text: 'OK' }]
-                );
+                return; // Simply return, no error shown
             }
+            
+            console.error('CRITICAL IMPORT ERROR:', err);
+            const errorMsg = err?.message || (typeof err === 'string' ? err : 'Internal Data Error');
+
+            Alert.alert(
+                'Import Failed',
+                `Database Error: ${errorMsg}\n\nTry clicking "Setup Database" in settings if the problem persists.`,
+                [{ text: 'OK' }]
+            );
         }
     };
 

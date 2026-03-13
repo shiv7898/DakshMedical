@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import {
     ScrollView,
     SafeAreaView,
     StatusBar,
+    Keyboard,
 } from 'react-native';
 import { Colors, Spacing, Typography } from '../styles/theme';
 import db from '../api/database';
@@ -23,6 +24,23 @@ const LoginScreen = ({ navigation }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [focusField, setFocusField] = useState(null);
+    const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+    useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener(
+            'keyboardDidShow',
+            () => setKeyboardVisible(true)
+        );
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => setKeyboardVisible(false)
+        );
+
+        return () => {
+            keyboardDidHideListener.remove();
+            keyboardDidShowListener.remove();
+        };
+    }, []);
 
     const handleLogin = () => {
         if (!username || !password) {
@@ -30,35 +48,28 @@ const LoginScreen = ({ navigation }) => {
             return;
         }
 
-        db.transaction(tx => {
-            tx.executeSql(
-                'SELECT * FROM users WHERE username = ? AND password = ?',
-                [username, password],
-                (_, results) => {
-                    if (results.rows.length > 0) {
-                        navigation.replace('MainTabs');
-                    } else {
-                        Alert.alert('Invalid credentials', 'Please check your username and password');
-                    }
-                },
-                (_, error) => {
-                    console.error(error);
-                    Alert.alert('Error', 'An error occurred during login');
-                }
-            );
-        });
+        if (username.toLowerCase() === 'a' && password === 'a') {
+            navigation.replace('ProfileSetup', { isSetup: true });
+        } else {
+            Alert.alert('Invalid credentials', 'Please check your username and password');
+        }
     };
 
-    // Standard container
-    const Content = (
+    const MainContent = (
         <ScrollView
+            style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            bounces={false}
+            scrollEnabled={isKeyboardVisible}
         >
+            <View style={styles.bgCircle1} pointerEvents="none" />
+            <View style={styles.bgCircle2} pointerEvents="none" />
+
             <View style={styles.header}>
-                <View style={styles.logoCircle}>
-                    <Icon name="pulse" size={40} color={Colors.primary} />
+                <View style={styles.logoWrapper}>
+                    <Icon name="pulse" size={45} color="#FFFFFF" />
                 </View>
                 <Text style={styles.appName}>Airsine</Text>
                 <Text style={styles.appSubtitle}>Professional CPAP Monitor</Text>
@@ -66,14 +77,15 @@ const LoginScreen = ({ navigation }) => {
 
             <View style={styles.content}>
                 <View style={styles.card}>
-                    <Text style={styles.welcomeText}>Medical Account Login</Text>
+                    <Text style={styles.welcomeText}>Welcome Back</Text>
+                    <Text style={styles.instructionText}>Login with your medical account</Text>
 
                     <View style={[styles.inputWrapper, focusField === 'user' && styles.inputFocus]}>
-                        <Icon name="account-circle-outline" size={20} color={focusField === 'user' ? Colors.primary : Colors.textSecondary} />
+                        <Icon name="account-circle-outline" size={22} color={focusField === 'user' ? Colors.primary : '#A0AEC0'} />
                         <TextInput
                             style={styles.input}
                             placeholder="Username"
-                            placeholderTextColor={Colors.textSecondary}
+                            placeholderTextColor="#A0AEC0"
                             value={username}
                             onChangeText={setUsername}
                             onFocus={() => setFocusField('user')}
@@ -84,11 +96,11 @@ const LoginScreen = ({ navigation }) => {
                     </View>
 
                     <View style={[styles.inputWrapper, focusField === 'pass' && styles.inputFocus]}>
-                        <Icon name="lock-outline" size={20} color={focusField === 'pass' ? Colors.primary : Colors.textSecondary} />
+                        <Icon name="lock-outline" size={22} color={focusField === 'pass' ? Colors.primary : '#A0AEC0'} />
                         <TextInput
                             style={styles.input}
                             placeholder="Password"
-                            placeholderTextColor={Colors.textSecondary}
+                            placeholderTextColor="#A0AEC0"
                             value={password}
                             onChangeText={setPassword}
                             onFocus={() => setFocusField('pass')}
@@ -103,34 +115,31 @@ const LoginScreen = ({ navigation }) => {
                         onPress={handleLogin}
                         activeOpacity={0.8}
                     >
-                        <Text style={styles.buttonText}>LOGIN</Text>
+                        <Text style={styles.buttonText}>LOGIN SECURELY</Text>
+                        <Icon name="arrow-right" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.forgotBtn}>
-                        <Text style={styles.forgotText}>Forgot Credentials?</Text>
-                    </TouchableOpacity>
+                    <View style={styles.hintBox}>
+                    </View>
                 </View>
+            </View>
 
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>Secure Hospital Link v1.0.5</Text>
-                </View>
+            <View style={styles.footer}>
+                <Text style={styles.footerText}>Secure Hospital Link v1.0.5</Text>
             </View>
         </ScrollView>
     );
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-            {Platform.OS === 'ios' ? (
-                <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-                    {Content}
-                </KeyboardAvoidingView>
-            ) : (
-                /* On Android, adjustResize in AndroidManifest handles it best with ScrollView */
-                <View style={{ flex: 1 }}>
-                    {Content}
-                </View>
-            )}
+            <StatusBar barStyle="light-content" backgroundColor="#0B1B3D" />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
+                style={{ flex: 1 }}
+            >
+                {MainContent}
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };
@@ -138,120 +147,171 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#0B1B3D', // Deep modern navy
+    },
+    bgCircle1: {
+        position: 'absolute',
+        top: -100,
+        right: -80,
+        width: 200,
+        height: 200,
+        borderRadius: 150,
+        backgroundColor: 'rgba(56, 114, 255, 0.4)',
+        zIndex: 0,
+    },
+    bgCircle2: {
+        position: 'absolute',
+        top: 450,
+        left: -120,
+        width: 250,
+        height: 250,
+        borderRadius: 125,
+        backgroundColor: 'rgba(102, 51, 255, 0.25)',
+        zIndex: 0,
     },
     scrollContent: {
         flexGrow: 1,
+        paddingTop: Platform.OS === 'ios' ? 40 : 20,
+        paddingBottom: 10,
     },
     header: {
-        height: SCREEN_HEIGHT * 0.28,
-        minHeight: 180,
-        backgroundColor: '#F8FBFF',
-        justifyContent: 'center',
         alignItems: 'center',
-        borderBottomLeftRadius: 40,
-        borderBottomRightRadius: 40,
+        marginTop: 40,
+        marginBottom: 20,
+        zIndex: 1,
     },
-    logoCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#FFFFFF',
+    logoWrapper: {
+        width: 70,
+        height: 70,
+        borderRadius: 22,
+        backgroundColor: Colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 8,
-        elevation: 3,
+        marginBottom: 16,
+        elevation: 10,
         shadowColor: Colors.primary,
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
+        shadowOpacity: 0.5,
+        shadowOffset: { width: 0, height: 8 },
+        shadowRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     appName: {
-        ...Typography.header,
-        fontSize: 24,
-        color: Colors.primary,
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: 1,
     },
     appSubtitle: {
-        ...Typography.caption,
-        fontSize: 10,
-        letterSpacing: 1,
+        fontSize: 12,
+        fontWeight: '600',
+        color: 'rgba(255, 255, 255, 0.7)',
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        marginTop: 4,
     },
     content: {
         flex: 1,
-        paddingHorizontal: 25,
-        marginTop: -40,
-        paddingBottom: 20,
+        paddingHorizontal: 20,
+        marginTop: 15,
+        zIndex: 1,
     },
     card: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderRadius: 24,
-        padding: 24,
-        elevation: 10,
+        padding: 20,
+        paddingTop: 24,
+        elevation: 15,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.3,
+        shadowRadius: 25,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.8)',
     },
     welcomeText: {
-        ...Typography.subheader,
-        fontSize: 16,
         textAlign: 'center',
-        marginBottom: 20,
-        color: Colors.text,
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#1A202C',
+        marginBottom: 6,
+    },
+    instructionText: {
+        textAlign: 'center',
+        fontSize: 13,
+        color: '#718096',
+        marginBottom: 30,
+        fontWeight: '500',
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F7FAFF',
-        borderRadius: 14,
-        paddingHorizontal: 15,
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: '#EDF2F7',
-        height: 54,
+        backgroundColor: '#F3F4F6',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        marginBottom: 16,
+        height: 52,
+        borderWidth: 1.5,
+        borderColor: 'transparent',
     },
     inputFocus: {
         borderColor: Colors.primary,
-        borderWidth: 1.5,
         backgroundColor: '#FFFFFF',
     },
     input: {
         flex: 1,
         height: '100%',
-        paddingHorizontal: 12,
-        color: Colors.text,
-        fontSize: 16,
+        paddingHorizontal: 14,
+        color: '#1A202C',
+        fontSize: 15,
+        fontWeight: '500',
     },
     loginButton: {
+        flexDirection: 'row',
         backgroundColor: Colors.primary,
-        height: 54,
-        borderRadius: 14,
+        height: 52,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 10,
-        elevation: 4,
+        elevation: 8,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
     },
     buttonText: {
         color: '#FFFFFF',
         fontWeight: 'bold',
         fontSize: 16,
+        letterSpacing: 1,
     },
-    forgotBtn: {
-        marginTop: 20,
+    hintBox: {
+        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center',
+        marginTop: 25,
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#EDF2F7',
     },
-    forgotText: {
+    hintText: {
         fontSize: 12,
         color: Colors.textSecondary,
+        marginLeft: 6,
         fontWeight: '600',
     },
     footer: {
-        marginTop: 'auto',
-        paddingVertical: 20,
+        marginTop: 40,
         alignItems: 'center',
+        zIndex: 1,
+        paddingBottom: 20,
     },
     footerText: {
-        fontSize: 10,
-        color: '#BDC3C7',
+        fontSize: 11,
+        color: 'rgba(255, 255, 255, 0.4)',
+        fontWeight: '600',
+        letterSpacing: 1,
     },
 });
 

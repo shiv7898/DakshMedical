@@ -30,7 +30,7 @@ const DashboardScreen = ({ navigation }) => {
             const logData = await getLogs();
             const patientData = await getPatientInfo();
             setLogs(logData);
-            setPatient(patientData || { name: 'Shiv Dhakad', age: 32 });
+            setPatient(patientData || {});
         } catch (error) {
             console.error(error);
         }
@@ -60,6 +60,7 @@ const DashboardScreen = ({ navigation }) => {
     };
 
     const metrics = getSummaryMetrics();
+    console.log('Metrics:', metrics);
 
     const SummaryCard = ({ title, value, unit, icon, color, subtitle, trend }) => (
         <View style={styles.modernCard}>

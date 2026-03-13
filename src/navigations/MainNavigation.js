@@ -92,6 +92,7 @@ const MainNavigation = () => {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="ProfileSetup" component={ProfileScreen} />
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="MachineSelection" component={MachineSelectionScreen} />
             <Stack.Screen name="ImportLog" component={ImportLogScreen} />
