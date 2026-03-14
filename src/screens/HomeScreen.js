@@ -43,14 +43,14 @@ const HomeScreen = () => {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Dynamic Header */}
+            <StatusBar barStyle="light-content" backgroundColor="#1565C0" />
             <View style={styles.header}>
                 <View>
                     <Text style={styles.headerTitle}>CPAP Therapy Dashboard</Text>
                     <Text style={styles.doctorName}>Good Morning, Shiv</Text>
                 </View>
                 <TouchableOpacity style={styles.refreshButton}>
-                    <Icon name="more-vert" size={24} color="#1A1C1E" />
+                    <Icon name="more-vert" size={24} color="#FFF" />
                 </TouchableOpacity>
             </View>
 
@@ -211,27 +211,27 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingVertical: 15,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F0F2F5',
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: '#1565C0',
     },
     headerTitle: {
-        fontSize: 14,
-        color: '#7B8D9E',
-        fontWeight: '500',
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.8)',
+        fontWeight: '700',
+        textTransform: 'uppercase',
     },
     doctorName: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: '#1A1C1E',
-        marginTop: 2,
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        marginTop: 0,
     },
     refreshButton: {
         width: 40,
         height: 40,
         borderRadius: 12,
-        backgroundColor: '#F0F2F5',
+        backgroundColor: 'rgba(255,255,255,0.18)',
         justifyContent: 'center',
         alignItems: 'center',
     },

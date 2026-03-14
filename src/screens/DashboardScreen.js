@@ -86,19 +86,19 @@ const DashboardScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.safeContainer}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
 
-            {/* Elegant Header - More Compact */}
+            {/* Elegant Header - Theme Matched */}
             <View style={styles.brandHeader}>
                 <View>
                     <Text style={styles.brandGreeting}>Patient Dashboard</Text>
-                    <Text style={styles.brandName}>{patient?.name}</Text>
+                    <Text style={styles.brandName}>{patient?.name || 'User'}</Text>
                 </View>
                 <TouchableOpacity
                     style={styles.profileBtn}
                     onPress={() => navigation.navigate('Reports')}
                 >
-                    <Icon name="file-chart-outline" size={24} color={Colors.primary} />
+                    <Icon name="file-chart-outline" size={24} color="#FFF" />
                 </TouchableOpacity>
             </View>
 
@@ -116,7 +116,7 @@ const DashboardScreen = ({ navigation }) => {
                 {metrics ? (
                     <>
                         {/* Latest Session Highlight */}
-                        <View style={styles.latestHighlight}>
+                        {/* <View style={styles.latestHighlight}>
                             <View style={styles.latestInfo}>
                                 <Text style={styles.latestLabel}>LAST TREATMENT</Text>
                                 <Text style={styles.latestValue}>{logs[0]?.date}</Text>
@@ -125,7 +125,7 @@ const DashboardScreen = ({ navigation }) => {
                                 <Text style={styles.latestScoreVal}>{logs[0]?.ahi}</Text>
                                 <Text style={styles.latestScoreLbl}>AHI</Text>
                             </View>
-                        </View>
+                        </View> */}
 
                         <View style={styles.modernMetricsGrid}>
                             <SummaryCard
@@ -211,7 +211,7 @@ const DashboardScreen = ({ navigation }) => {
                     </TouchableOpacity>
                 </View>
 
-                {logs.slice(0, 2).map((log, index) => (
+                {logs.slice(0, 7).map((log, index) => (
                     <TouchableOpacity key={index} style={styles.activityItem} activeOpacity={0.7} onPress={() => navigation.navigate('Logs')}>
                         <View style={styles.activityIcon}>
                             <Icon name="calendar-blank" size={18} color={Colors.primary} />
@@ -249,28 +249,28 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: Spacing.m,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
-        paddingBottom: 10,
-        backgroundColor: '#FFF',
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: Colors.primary,
     },
     brandGreeting: {
         fontSize: 10,
         fontWeight: '700',
-        color: Colors.textSecondary,
+        color: 'rgba(255,255,255,0.8)',
         textTransform: 'uppercase',
         letterSpacing: 0.8,
     },
     brandName: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: Colors.text,
+        color: '#FFFFFF',
         marginTop: 0,
     },
     profileBtn: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#F0F7FF',
+        backgroundColor: 'rgba(255,255,255,0.18)',
         justifyContent: 'center',
         alignItems: 'center',
     },

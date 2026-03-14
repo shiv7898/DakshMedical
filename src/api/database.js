@@ -18,7 +18,14 @@ export const setupDatabase = () => {
     tx.executeSql('DROP TABLE IF EXISTS patients');
 
     tx.executeSql(
-      'CREATE TABLE IF NOT EXISTS patients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER, gender TEXT, dob TEXT, address TEXT, phone TEXT, email TEXT, device_model TEXT, machine_serial TEXT)',
+      `CREATE TABLE IF NOT EXISTS patients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_custom_id TEXT,
+        name TEXT, age INTEGER, gender TEXT, dob TEXT,
+        address TEXT, phone TEXT, email TEXT,
+        device_model TEXT, machine_serial TEXT,
+        doctor_name TEXT, doctor_phone TEXT
+      )`,
       []
     );
     tx.executeSql(
@@ -27,15 +34,25 @@ export const setupDatabase = () => {
         patient_id INTEGER NOT NULL,
         date TEXT NOT NULL,
         usage_hours REAL DEFAULT 0,
-        ahi REAL DEFAULT 0,
-        cai REAL DEFAULT 0,
-        oai REAL DEFAULT 0,
-        leak_rate REAL DEFAULT 0,
+        therapy_type TEXT DEFAULT 'CPAP',
+        avg_set_pressure REAL DEFAULT 0,
         pressure_min REAL DEFAULT 0,
         pressure_max REAL DEFAULT 0,
         pressure_avg REAL DEFAULT 0,
         pressure_95th REAL DEFAULT 0,
-        compliance INTEGER DEFAULT 0,
+        avg_flow REAL DEFAULT 0,
+        leak_rate REAL DEFAULT 0,
+        large_leak_percent REAL DEFAULT 0,
+        avg_resp_rate REAL DEFAULT 0,
+        ahi REAL DEFAULT 0,
+        cai REAL DEFAULT 0,
+        oai REAL DEFAULT 0,
+        apnea_count INTEGER DEFAULT 0,
+        obstructive_count INTEGER DEFAULT 0,
+        central_count INTEGER DEFAULT 0,
+        hypopnea_count INTEGER DEFAULT 0,
+        mask_fault_count INTEGER DEFAULT 0,
+        compliance_percent REAL DEFAULT 0,
         machine_type TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`, []
@@ -104,22 +121,32 @@ export const recreateLogsTableWithData = (logsArray) => {
       // 1️⃣ Drop old table
       tx.executeSql('DROP TABLE IF EXISTS logs');
 
-      // 2️⃣ Recreate new table
+      // 2️⃣ Recreate new table with all new columns
       tx.executeSql(
         `CREATE TABLE logs (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           patient_id INTEGER NOT NULL,
           date TEXT NOT NULL,
           usage_hours REAL DEFAULT 0,
-          ahi REAL DEFAULT 0,
-          cai REAL DEFAULT 0,
-          oai REAL DEFAULT 0,
-          leak_rate REAL DEFAULT 0,
+          therapy_type TEXT DEFAULT 'CPAP',
+          avg_set_pressure REAL DEFAULT 0,
           pressure_min REAL DEFAULT 0,
           pressure_max REAL DEFAULT 0,
           pressure_avg REAL DEFAULT 0,
           pressure_95th REAL DEFAULT 0,
-          compliance INTEGER DEFAULT 0,
+          avg_flow REAL DEFAULT 0,
+          leak_rate REAL DEFAULT 0,
+          large_leak_percent REAL DEFAULT 0,
+          avg_resp_rate REAL DEFAULT 0,
+          ahi REAL DEFAULT 0,
+          cai REAL DEFAULT 0,
+          oai REAL DEFAULT 0,
+          apnea_count INTEGER DEFAULT 0,
+          obstructive_count INTEGER DEFAULT 0,
+          central_count INTEGER DEFAULT 0,
+          hypopnea_count INTEGER DEFAULT 0,
+          mask_fault_count INTEGER DEFAULT 0,
+          compliance_percent REAL DEFAULT 0,
           machine_type TEXT,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`
@@ -130,22 +157,37 @@ export const recreateLogsTableWithData = (logsArray) => {
       // 3️⃣ Insert new file data
       logsArray.forEach(logData => {
         tx.executeSql(
-          `INSERT INTO logs 
-          (patient_id, date, usage_hours, ahi, cai, leak_rate,
-           pressure_min, pressure_max, pressure_avg, pressure_95th, machine_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO logs
+          (patient_id, date, usage_hours, therapy_type, avg_set_pressure,
+           pressure_min, pressure_max, pressure_avg, pressure_95th,
+           avg_flow, leak_rate, large_leak_percent, avg_resp_rate,
+           ahi, cai, oai, apnea_count, obstructive_count, central_count,
+           hypopnea_count, mask_fault_count, compliance_percent, machine_type)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             logData.patient_id ?? 1,
             logData.date,
             logData.usage_hours ?? 0,
-            logData.ahi ?? 0,
-            logData.cai ?? 0,
-            logData.leak_rate ?? 0,
+            logData.therapy_type ?? 'CPAP',
+            logData.avg_set_pressure ?? 0,
             logData.pressure_min ?? 0,
             logData.pressure_max ?? 0,
             logData.pressure_avg ?? 0,
             logData.pressure_95th ?? (logData.pressure_max ?? 0) * 0.95,
-            logData.machine_type ?? "CPAP"
+            logData.avg_flow ?? 0,
+            logData.leak_rate ?? 0,
+            logData.large_leak_percent ?? 0,
+            logData.avg_resp_rate ?? 0,
+            logData.ahi ?? 0,
+            logData.cai ?? 0,
+            logData.oai ?? 0,
+            logData.apnea_count ?? 0,
+            logData.obstructive_count ?? 0,
+            logData.central_count ?? 0,
+            logData.hypopnea_count ?? 0,
+            logData.mask_fault_count ?? 0,
+            logData.compliance_percent ?? 0,
+            logData.machine_type ?? 'CPAP',
           ]
         );
       });
@@ -230,6 +272,7 @@ export const getPatientInfo = () => {
 export const savePatientInfo = (patientData) => {
   return new Promise((resolve, reject) => {
     const params = [
+      patientData?.patient_custom_id || "",
       patientData?.name || "",
       patientData?.age || "",
       patientData?.gender || "",
@@ -238,7 +281,9 @@ export const savePatientInfo = (patientData) => {
       patientData?.phone || "",
       patientData?.email || "",
       patientData?.device_model || "",
-      patientData?.machine_serial || ""
+      patientData?.machine_serial || "",
+      patientData?.doctor_name || "",
+      patientData?.doctor_phone || "",
     ];
 
     db.transaction(tx => {
@@ -249,18 +294,28 @@ export const savePatientInfo = (patientData) => {
           if (results.rows.length > 0) {
             const id = results.rows.item(0).id;
             tx.executeSql(
-              `UPDATE patients SET name=?, age=?, gender=?, dob=?, address=?, phone=?, email=?, device_model=?, machine_serial=? WHERE id=?`,
+              `UPDATE patients SET
+                patient_custom_id=?, name=?, age=?, gender=?, dob=?,
+                address=?, phone=?, email=?, device_model=?, machine_serial=?,
+                doctor_name=?, doctor_phone=?
+               WHERE id=?`,
               [...params, id],
               (_tx, res) => resolve(res),
               (_tx, err) => {
                 console.error("SQL UPDATE Error:", err);
+                // Try ALTER TABLE to add missing columns (for existing DBs)
+                tx.executeSql('ALTER TABLE patients ADD COLUMN patient_custom_id TEXT', [], () => {}, () => {});
+                tx.executeSql('ALTER TABLE patients ADD COLUMN doctor_name TEXT', [], () => {}, () => {});
+                tx.executeSql('ALTER TABLE patients ADD COLUMN doctor_phone TEXT', [], () => {}, () => {});
                 reject(err || new Error("SQL UPDATE Error"));
                 return true;
               }
             );
           } else {
             tx.executeSql(
-              `INSERT INTO patients (name, age, gender, dob, address, phone, email, device_model, machine_serial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO patients
+                (patient_custom_id, name, age, gender, dob, address, phone, email, device_model, machine_serial, doctor_name, doctor_phone)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               params,
               (_tx, res) => resolve(res),
               (_tx, err) => {

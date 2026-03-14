@@ -81,9 +81,10 @@ const GraphScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.safeContainer}>
+            <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Icon name="arrow-left" size={24} color={Colors.text} />
+                    <Icon name="arrow-left" size={24} color="#FFF" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Clinical Trends</Text>
                 <View style={{ width: 40 }} />
@@ -213,15 +214,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: Spacing.m,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
-        paddingBottom: 10,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: Colors.primary,
     },
     backBtn: {
         padding: 5,
     },
     headerTitle: {
-        ...Typography.subheader,
         fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
     },
     container: {
         flex: 1,

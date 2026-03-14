@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -12,90 +12,214 @@ import {
     StatusBar,
     Modal,
     KeyboardAvoidingView,
+    Animated,
+    Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Spacing, Typography } from '../styles/theme';
 import { getPatientInfo, savePatientInfo, clearPatientInfo } from '../api/database';
 
-const InfoCard = ({ label, value, icon, editable, keyboardType = 'default', placeholder, isEditing, onChangeText, onActionPress, type }) => (
-    <View style={styles.infoCard}>
-        <View style={styles.infoIconBox}>
-            <Icon name={icon} size={20} color={Colors.primary} />
-        </View>
-        <View style={styles.infoBody}>
-            <Text style={styles.infoLabel}>{label}</Text>
-            {isEditing && editable ? (
-                type === 'select' || type === 'date' ? (
-                    <TouchableOpacity onPress={() => onActionPress(editable, type, value)} style={styles.infoInputBtn}>
-                        <Text style={[styles.infoInput, !value && { color: Colors.textSecondary }]}>
-                            {value || placeholder || `Select ${label}`}
-                        </Text>
-                    </TouchableOpacity>
+// ─── Colours & tokens ────────────────────────────────────────────────────────
+const PRIMARY = '#1565C0';
+const PRIMARY_LIGHT = '#1E88E5';
+const PRIMARY_BG = '#EFF6FF';
+const BORDER = '#DBEAFE';
+const TEXT = '#1E293B';
+const TEXT_SEC = '#607D8B';
+const CARD_BG = '#FFFFFF';
+const INPUT_BG = '#F8FAFF';
+const ERROR = '#EF4444';
+
+// ─── Single field row ─────────────────────────────────────────────────────────
+const FieldRow = ({
+    label, icon, value, editable, keyboardType = 'default',
+    placeholder, isEditing, onChangeText, onPress, type, last = false,
+}) => {
+    const isAction = type === 'select' || type === 'date';
+    return (
+        <View style={[fStyles.row, last && { borderBottomWidth: 0 }]}>
+            <View style={fStyles.iconWrap}>
+                <Icon name={icon} size={18} color={PRIMARY_LIGHT} />
+            </View>
+            <View style={fStyles.body}>
+                <Text style={fStyles.label}>{label}</Text>
+                {isEditing && editable ? (
+                    isAction ? (
+                        <TouchableOpacity onPress={onPress}>
+                            <Text style={[fStyles.value, !value && fStyles.placeholder]}>
+                                {value || placeholder || `Select ${label}`}
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TextInput
+                            style={fStyles.input}
+                            value={String(value || '')}
+                            onChangeText={text => onChangeText(editable, text)}
+                            placeholder={placeholder || `Enter ${label}`}
+                            placeholderTextColor="#AAB8C8"
+                            keyboardType={keyboardType}
+                        />
+                    )
                 ) : (
-                    <TextInput
-                        style={styles.infoInput}
-                        value={String(value || '')}
-                        onChangeText={(text) => onChangeText(editable, text)}
-                        placeholder={placeholder || `Enter ${label}`}
-                        placeholderTextColor={Colors.textSecondary}
-                        keyboardType={keyboardType}
-                    />
-                )
-            ) : (
-                <Text style={styles.infoValue}>{value || 'Not Set'}</Text>
+                    <Text style={[fStyles.value, !value && fStyles.notSet]}>
+                        {value || 'Not set'}
+                    </Text>
+                )}
+            </View>
+            {isEditing && isAction && (
+                <Icon name="chevron-right" size={18} color={TEXT_SEC} style={{ alignSelf: 'center' }} />
             )}
         </View>
+    );
+};
+
+const fStyles = StyleSheet.create({
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 13,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: BORDER,
+    },
+    iconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: PRIMARY_BG,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    body: { flex: 1 },
+    label: { fontSize: 10, fontWeight: '700', color: TEXT_SEC, letterSpacing: 0.4, marginBottom: 2 },
+    value: { fontSize: 14, fontWeight: '600', color: TEXT },
+    notSet: { color: '#CBD5E1', fontStyle: 'italic' },
+    placeholder: { color: '#AAB8C8' },
+    input: { fontSize: 14, color: TEXT, padding: 0, fontWeight: '500' },
+});
+
+// ─── Section card wrapper ────────────────────────────────────────────────────
+const SectionCard = ({ title, iconName, children }) => (
+    <View style={scStyles.card}>
+        <View style={scStyles.titleRow}>
+            <View style={scStyles.titleIcon}>
+                <Icon name={iconName} size={16} color={PRIMARY_LIGHT} />
+            </View>
+            <Text style={scStyles.titleText}>{title}</Text>
+        </View>
+        {children}
     </View>
 );
 
+const scStyles = StyleSheet.create({
+    card: {
+        backgroundColor: CARD_BG,
+        borderRadius: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: BORDER,
+        overflow: 'hidden',
+        shadowColor: PRIMARY,
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF4FF',
+        backgroundColor: '#F5F9FF',
+    },
+    titleIcon: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: '#DBEAFE',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    titleText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: PRIMARY,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+    },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 const ProfileScreen = ({ navigation, route }) => {
     const isSetup = route?.params?.isSetup || false;
     const [isEditing, setIsEditing] = useState(isSetup);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [patient, setPatient] = useState({});
 
-    // Picker States
+    // Picker states
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showSelectModal, setShowSelectModal] = useState(false);
     const [currentSelectField, setCurrentSelectField] = useState('');
     const [currentSelectOptions, setCurrentSelectOptions] = useState([]);
-    
-    const genderOptions = ['Male', 'Female', 'Other'];
-    const deviceModelOptions = ['AirSense 11 AutoSet', 'AirSense 10', 'AirCurve 10 VAuto', 'DreamStation 2'];
 
-    useEffect(() => {
-        loadPatientData();
-    }, []);
+    const genderOptions = ['Male', 'Female', 'Other'];
+    const deviceModelOptions = [
+        'AirSense 11 AutoSet',
+        'AirSense 10 AutoSet',
+        'AirSense 10 CPAP',
+        'AirCurve 10 VAuto',
+        'DreamStation 2 Auto CPAP',
+        'DreamStation CPAP',
+        'Other',
+    ];
+
+    // Avatar initials animation
+    const avatarScale = useRef(new Animated.Value(1)).current;
+    const pulseAvatar = () => {
+        Animated.sequence([
+            Animated.spring(avatarScale, { toValue: 1.08, useNativeDriver: true }),
+            Animated.spring(avatarScale, { toValue: 1, useNativeDriver: true }),
+        ]).start();
+    };
+
+    useEffect(() => { loadPatientData(); }, []);
 
     const loadPatientData = async () => {
         setLoading(true);
         try {
             const data = await getPatientInfo();
-            if (data) {
-                setPatient(data);
-            } else if (isSetup) {
-                setIsEditing(true);
-            }
-        } catch (error) {
-            console.error('Failed to load patient data:', error);
+            if (data) setPatient(data);
+            else if (isSetup) setIsEditing(true);
+        } catch (e) {
+            console.error('Failed to load patient data:', e);
         }
         setLoading(false);
     };
 
     const handleSave = async () => {
+        if (!patient.name?.trim()) {
+            Alert.alert('Required', 'Please enter the patient name before saving.');
+            return;
+        }
         try {
-            setLoading(true);
+            setSaving(true);
             await savePatientInfo(patient);
             if (isSetup) {
                 navigation.replace('MainTabs');
             } else {
                 setIsEditing(false);
+                Alert.alert('✅ Saved', 'Profile updated successfully.');
             }
-        } catch (error) {
-            console.error('Failed to save patient data:', error);
+        } catch (e) {
+            console.error('Failed to save patient data:', e);
+            Alert.alert('Error', 'Could not save profile. Please try again.');
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
 
@@ -117,7 +241,7 @@ const ProfileScreen = ({ navigation, route }) => {
     const handleDateChange = (event, selectedDate) => {
         setShowDatePicker(false);
         if (selectedDate) {
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const d = selectedDate.getDate().toString().padStart(2, '0');
             const m = months[selectedDate.getMonth()];
             const y = selectedDate.getFullYear();
@@ -130,97 +254,246 @@ const ProfileScreen = ({ navigation, route }) => {
         setShowSelectModal(false);
     };
 
-    const handleLogout = async () => {
-        try {
-            await clearPatientInfo();
-            navigation.replace('Login');
-        } catch (error) {
-            console.error('Logout error:', error);
-            navigation.replace('Login');
-        }
+    const handleLogout = () => {
+        Alert.alert(
+            'Logout',
+            'Are you sure you want to logout?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Logout', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await clearPatientInfo();
+                            navigation.replace('Login');
+                        } catch (e) {
+                            navigation.replace('Login');
+                        }
+                    }
+                }
+            ]
+        );
     };
+
+    const initials = (patient?.name || 'P')
+        .split(' ')
+        .map(w => w[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+
+    // ── common field props helper
+    const fp = (field) => ({
+        editable: field,
+        isEditing,
+        value: patient?.[field],
+        onChangeText: handleInputChange,
+    });
+    const fpAction = (field, type) => ({
+        ...fp(field),
+        type,
+        onPress: () => handleActionPress(field, type),
+    });
 
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={Colors.primary} />
+            <View style={styles.loadingCont}>
+                <ActivityIndicator size="large" color={PRIMARY_LIGHT} />
+                <Text style={styles.loadingText}>Loading profile…</Text>
             </View>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-            <KeyboardAvoidingView 
-                style={{ flex: 1 }} 
+        <SafeAreaView style={styles.safe}>
+            <StatusBar backgroundColor={PRIMARY} barStyle="light-content" />
+
+            {/* ── Top Header ── */}
+            <View style={styles.topBar}>
+                {!isSetup && (
+                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                        <Icon name="arrow-left" size={22} color="#fff" />
+                    </TouchableOpacity>
+                )}
+                <Text style={styles.topTitle}>Patient Profile</Text>
+                <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={() => {
+                        if (isEditing) {
+                            setIsEditing(false);
+                            loadPatientData(); // reset unsaved changes
+                        } else {
+                            setIsEditing(true);
+                        }
+                    }}
+                >
+                    <Icon name={isEditing ? 'close' : 'pencil-outline'} size={18} color="#fff" />
+                    <Text style={styles.editBtnText}>{isEditing ? 'Cancel' : 'Edit'}</Text>
+                </TouchableOpacity>
+            </View>
+
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Patient Profile</Text>
-                    {!isSetup && (
-                        <TouchableOpacity onPress={() => setIsEditing(!isEditing)}>
-                            <Text style={styles.editAction}>{isEditing ? 'Cancel' : 'Update Info'}</Text>
+                <ScrollView
+                    contentContainerStyle={styles.scroll}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* ── Avatar Hero Card ── */}
+                    <View style={styles.heroCard}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={pulseAvatar}>
+                            <Animated.View style={[styles.avatar, { transform: [{ scale: avatarScale }] }]}>
+                                <Text style={styles.avatarText}>{initials}</Text>
+                            </Animated.View>
+                        </TouchableOpacity>
+                        <Text style={styles.heroName}>
+                            {patient?.name || (isSetup ? 'New Patient' : 'Your Name')}
+                        </Text>
+                        <View style={styles.idBadge}>
+                            <Icon name="identifier" size={13} color={PRIMARY_LIGHT} />
+                            <Text style={styles.idBadgeText}>
+                                ID: {patient?.patient_custom_id || patient?.id || 'Not Assigned'}
+                            </Text>
+                        </View>
+                        {patient?.gender ? (
+                            <Text style={styles.heroBio}>
+                                {patient.gender}{patient?.age ? `  ·  ${patient.age} yrs` : ''}{patient?.dob ? `  ·  ${patient.dob}` : ''}
+                            </Text>
+                        ) : null}
+                    </View>
+
+                    {/* ── Personal Information ── */}
+                    <SectionCard title="Personal Information" iconName="account-outline">
+                        <FieldRow
+                            label="Patient ID"
+                            icon="identifier"
+                            placeholder="e.g. P-00001"
+                            keyboardType="default"
+                            {...fp('patient_custom_id')}
+                        />
+                        <FieldRow
+                            label="Full Name"
+                            icon="account-details-outline"
+                            placeholder="e.g. Shiv Dhakad"
+                            {...fp('name')}
+                        />
+                        <FieldRow
+                            label="Age"
+                            icon="calendar-account-outline"
+                            placeholder="e.g. 32"
+                            keyboardType="numeric"
+                            {...fp('age')}
+                        />
+                        <FieldRow
+                            label="Gender"
+                            icon="gender-male-female"
+                            placeholder="Select gender"
+                            {...fpAction('gender', 'select')}
+                        />
+                        <FieldRow
+                            label="Date of Birth"
+                            icon="cake-variant-outline"
+                            placeholder="e.g. 12-Aug-1992"
+                            {...fpAction('dob', 'date')}
+                        />
+                        <FieldRow
+                            label="Phone Number"
+                            icon="phone-outline"
+                            placeholder="e.g. +91 9876543210"
+                            keyboardType="phone-pad"
+                            {...fp('phone')}
+                        />
+                        <FieldRow
+                            label="Email Address"
+                            icon="email-outline"
+                            placeholder="e.g. name@example.com"
+                            keyboardType="email-address"
+                            {...fp('email')}
+                        />
+                        <FieldRow
+                            label="Residential Address"
+                            icon="map-marker-outline"
+                            placeholder="e.g. 102, Medical Enclave, New Delhi"
+                            last={true}
+                            {...fp('address')}
+                        />
+                    </SectionCard>
+
+                    {/* ── CPAP Device ── */}
+                    <SectionCard title="CPAP Device" iconName="medical-bag">
+                        <FieldRow
+                            label="Device Model"
+                            icon="cpu-64-bit"
+                            placeholder="Select device model"
+                            {...fpAction('device_model', 'select')}
+                        />
+                        <FieldRow
+                            label="Device Serial No (SN)"
+                            icon="barcode-scan"
+                            placeholder="e.g. AS11-9238-120"
+                            last={true}
+                            {...fp('machine_serial')}
+                        />
+                    </SectionCard>
+
+                    {/* ── Referring Physician ── */}
+                    {/* <SectionCard title="Referring Physician" iconName="doctor">
+                        <FieldRow
+                            label="Doctor Name"
+                            icon="stethoscope"
+                            placeholder="e.g. Dr. Anil Kumar"
+                            {...fp('doctor_name')}
+                        />
+                        <FieldRow
+                            label="Doctor Phone"
+                            icon="phone-plus-outline"
+                            placeholder="e.g. +91 9876543210"
+                            keyboardType="phone-pad"
+                            last={true}
+                            {...fp('doctor_phone')}
+                        />
+                    </SectionCard> */}
+
+                    {/* ── Save Button ── */}
+                    {isEditing && (
+                        <TouchableOpacity
+                            style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+                            onPress={handleSave}
+                            disabled={saving}
+                            activeOpacity={0.85}
+                        >
+                            {saving ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <>
+                                    <Icon name="content-save-outline" size={20} color="#fff" />
+                                    <Text style={styles.saveBtnText}>SAVE PROFILE</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
                     )}
-                </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                {/* Profile Header Card */}
-                <View style={styles.profileMainCard}>
-                    <View style={styles.avatarGlow}>
-                        <View style={styles.avatarFull}>
-                            <Icon name="account" size={50} color={Colors.primary} />
-                        </View>
-                    </View>
-                    <Text style={styles.patientName}>{patient?.name}</Text>
-                    <Text style={styles.patientSub}>ID: {patient?.id || 'P-00000'}</Text>
-                </View>
+                    {/* ── Logout ── */}
+                    {!isSetup && (
+                        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.75}>
+                            <Icon name="logout-variant" size={18} color={ERROR} />
+                            <Text style={styles.logoutText}>Logout Account</Text>
+                        </TouchableOpacity>
+                    )}
 
-                <Text style={styles.sectionHeader}>Personal Information</Text>
-                <InfoCard label="Patient Name" value={patient?.name} icon="account-details" editable="name" placeholder="e.g. Shiv Dhakad" isEditing={isEditing} onChangeText={handleInputChange} />
-
-                <View style={styles.row}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                        <InfoCard label="Age" value={patient?.age} icon="calendar-account" editable="age" keyboardType="numeric" placeholder="e.g. 32" isEditing={isEditing} onChangeText={handleInputChange} />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                        <InfoCard label="Gender" value={patient?.gender} icon="gender-male-female" editable="gender" placeholder="e.g. Male" isEditing={isEditing} onChangeText={handleInputChange} type="select" onActionPress={handleActionPress} />
-                    </View>
-                </View>
-
-                <InfoCard label="DOB" value={patient?.dob} icon="calendar-outline" editable="dob" placeholder="e.g. 12-Aug-1992" isEditing={isEditing} onChangeText={handleInputChange} type="date" onActionPress={handleActionPress} />
-                <InfoCard label="Phone Number" value={patient?.phone} icon="phone-outline" editable="phone" keyboardType="phone-pad" placeholder="e.g. +91 9876543210" isEditing={isEditing} onChangeText={handleInputChange} />
-                <InfoCard label="Email Address" value={patient?.email} icon="email-outline" editable="email" keyboardType="email-address" placeholder="e.g. daksh.singh@example.com" isEditing={isEditing} onChangeText={handleInputChange} />
-                <InfoCard label="Residential Address" value={patient?.address} icon="map-marker-outline" editable="address" placeholder="e.g. 102, Medical Enclave, New Delhi" isEditing={isEditing} onChangeText={handleInputChange} />
-
-                <Text style={styles.sectionHeader}>Device Monitoring</Text>
-                <InfoCard label="Device Model" value={patient?.device_model} icon="nasal-cannula" editable="device_model" placeholder="e.g. AirSense 11 AutoSet" isEditing={isEditing} onChangeText={handleInputChange} type="select" onActionPress={handleActionPress} />
-                <InfoCard label="Device Serial No (SN)" value={patient?.machine_serial} icon="barcode-scan" editable="machine_serial" placeholder="e.g. AS11-9238-120" isEditing={isEditing} onChangeText={handleInputChange} />
-
-                {isEditing && (
-                    <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                        <Text style={styles.saveBtnText}>SAVE PROFILE</Text>
-                    </TouchableOpacity>
-                )}
-
-                {!isSetup && (
-                    <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-                        <Icon name="logout-variant" size={20} color={Colors.error} />
-                        <Text style={styles.logoutText}>Logout Account</Text>
-                    </TouchableOpacity>
-                )}
-
-                <View style={{ height: 300 }} />
+                    <View style={{ height: 40 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {/* DatePicker Wrapper */}
+            {/* ── DatePicker ── */}
             {showDatePicker && (
                 <DateTimePicker
                     value={
-                        (patient?.dob && !isNaN(Date.parse(patient.dob.replace(/-/g, ' ')))) 
-                        ? new Date(patient.dob.replace(/-/g, ' ')) 
-                        : new Date(1990, 0, 1) // default to 1990 for easier DOB select
+                        (patient?.dob && !isNaN(Date.parse(patient.dob.replace(/-/g, ' '))))
+                            ? new Date(patient.dob.replace(/-/g, ' '))
+                            : new Date(1990, 0, 1)
                     }
                     mode="date"
                     display="spinner"
@@ -229,16 +502,41 @@ const ProfileScreen = ({ navigation, route }) => {
                 />
             )}
 
-            {/* Select Options Modal */}
-            <Modal visible={showSelectModal} transparent={true} animationType="slide">
-                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSelectModal(false)}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select an Option</Text>
-                        {currentSelectOptions.map((opt, index) => (
-                            <TouchableOpacity key={index} style={styles.modalOption} onPress={() => handleOptionSelect(opt)}>
-                                <Text style={styles.modalOptionText}>{opt}</Text>
-                            </TouchableOpacity>
-                        ))}
+            {/* ── Bottom Sheet Select Modal ── */}
+            <Modal visible={showSelectModal} transparent animationType="slide">
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowSelectModal(false)}
+                >
+                    <View style={styles.modalSheet}>
+                        <View style={styles.modalHandle} />
+                        <Text style={styles.modalTitle}>
+                            {currentSelectField === 'gender' ? 'Select Gender' : 'Select Device Model'}
+                        </Text>
+                        <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+                            {currentSelectOptions.map((opt, i) => (
+                                <TouchableOpacity
+                                    key={i}
+                                    style={[
+                                        styles.modalOpt,
+                                        patient?.[currentSelectField] === opt && styles.modalOptActive,
+                                        i === currentSelectOptions.length - 1 && { borderBottomWidth: 0 },
+                                    ]}
+                                    onPress={() => handleOptionSelect(opt)}
+                                >
+                                    <Text style={[
+                                        styles.modalOptText,
+                                        patient?.[currentSelectField] === opt && { color: PRIMARY, fontWeight: 'bold' },
+                                    ]}>
+                                        {opt}
+                                    </Text>
+                                    {patient?.[currentSelectField] === opt && (
+                                        <Icon name="check-circle" size={18} color={PRIMARY_LIGHT} />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
                         <TouchableOpacity style={styles.modalCancel} onPress={() => setShowSelectModal(false)}>
                             <Text style={styles.modalCancelText}>Cancel</Text>
                         </TouchableOpacity>
@@ -249,203 +547,150 @@ const ProfileScreen = ({ navigation, route }) => {
     );
 };
 
+// ─── Screen Styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-    },
-    header: {
+    safe: { flex: 1, backgroundColor: '#F0F6FF' },
+    loadingCont: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F6FF' },
+    loadingText: { marginTop: 12, fontSize: 13, color: TEXT_SEC },
+
+    // Header
+    topBar: {
+        backgroundColor: PRIMARY,
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: Spacing.xl,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
-        paddingBottom: Spacing.m,
-        backgroundColor: '#FFF',
+        paddingHorizontal: 16,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 14,
+        paddingBottom: 14,
     },
-    headerTitle: {
-        ...Typography.subheader,
-        fontSize: 18,
-    },
-    editAction: {
-        color: Colors.primary,
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    scrollContent: {
-        padding: Spacing.m,
-    },
-    profileMainCard: {
-        backgroundColor: '#F8FBFF',
-        borderRadius: 24,
-        padding: 20,
+    backBtn: { marginRight: 10, padding: 2 },
+    topTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#fff', letterSpacing: 0.4 },
+    editBtn: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        backgroundColor: 'rgba(255,255,255,0.18)',
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        gap: 5,
+    },
+    editBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+    // Scroll
+    scroll: { padding: 16 },
+
+    // Hero card
+    heroCard: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        alignItems: 'center',
+        padding: 24,
+        marginBottom: 18,
         borderWidth: 1,
-        borderColor: '#E3F2FD',
+        borderColor: BORDER,
+        shadowColor: PRIMARY,
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 3,
     },
-    avatarGlow: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: '#FFF',
+    avatar: {
+        width: 84,
+        height: 84,
+        borderRadius: 42,
+        backgroundColor: PRIMARY,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 10,
-        elevation: 4,
-        shadowColor: Colors.primary,
-        shadowOpacity: 0.15,
-        shadowRadius: 5,
+        marginBottom: 14,
+        shadowColor: PRIMARY,
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 6,
     },
-    avatarFull: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: '#F0F7FF',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    patientName: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: Colors.text,
-    },
-    patientSub: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    sectionHeader: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: Colors.primary,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        marginBottom: 10,
-        marginTop: 15,
-        marginLeft: 4,
-    },
-    infoCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 12,
+    avatarText: { fontSize: 30, fontWeight: 'bold', color: '#fff', letterSpacing: 1 },
+    heroName: { fontSize: 20, fontWeight: 'bold', color: TEXT, marginBottom: 6 },
+    idBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        backgroundColor: PRIMARY_BG,
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        marginBottom: 6,
         borderWidth: 1,
-        borderColor: '#F1F4F8',
+        borderColor: BORDER,
+        gap: 4,
     },
-    infoIconBox: {
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        backgroundColor: '#F3F9FF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    infoBody: {
-        flex: 1,
-    },
-    infoLabel: {
-        fontSize: 10,
-        color: Colors.textSecondary,
-        fontWeight: '600',
-    },
-    infoValue: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: Colors.text,
-        marginTop: 1,
-    },
-    infoInput: {
-        fontSize: 14,
-        fontWeight: 'light',
-        color: "gray",
-        padding: 0,
-        marginTop: 1,
-    },
-    infoInputBtn: {
-        justifyContent: 'center',
-        paddingVertical: 2,
-        marginTop: 1,
-    },
-    row: {
-        flexDirection: 'row',
-    },
+    idBadgeText: { fontSize: 12, color: PRIMARY_LIGHT, fontWeight: '700' },
+    heroBio: { fontSize: 12, color: TEXT_SEC, marginTop: 2 },
+
+    // Save
     saveBtn: {
-        backgroundColor: Colors.primary,
-        height: 50,
-        borderRadius: 12,
+        backgroundColor: PRIMARY,
+        flexDirection: 'row',
+        height: 52,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: 20,
+        marginBottom: 12,
+        gap: 10,
         elevation: 4,
+        shadowColor: PRIMARY,
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
     },
-    saveBtnText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        letterSpacing: 1,
-    },
+    saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15, letterSpacing: 1.2 },
+
+    // Logout
     logoutBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 30,
+        paddingVertical: 14,
+        gap: 8,
     },
-    logoutText: {
-        color: Colors.error,
-        fontWeight: 'bold',
-        marginLeft: 10,
-    },
+    logoutText: { color: ERROR, fontWeight: 'bold', fontSize: 14 },
+
+    // Modal
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(10,20,60,0.5)',
         justifyContent: 'flex-end',
     },
-    modalContent: {
-        backgroundColor: '#FFF',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 24,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    modalSheet: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        padding: 20,
+        paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+        maxHeight: '75%',
+    },
+    modalHandle: {
+        width: 40, height: 4, borderRadius: 2,
+        backgroundColor: '#CBD5E1',
+        alignSelf: 'center', marginBottom: 16,
     },
     modalTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: Colors.text,
-        marginBottom: 16,
-        textAlign: 'center',
+        fontSize: 17, fontWeight: 'bold', color: TEXT,
+        textAlign: 'center', marginBottom: 12,
     },
-    modalOption: {
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F4F8',
+    modalOpt: {
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 15,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EFF3F8',
     },
-    modalOptionText: {
-        fontSize: 16,
-        color: Colors.primary,
-        fontWeight: '600',
-    },
+    modalOptActive: { backgroundColor: '#F0F7FF' },
+    modalOptText: { fontSize: 15, color: TEXT },
     modalCancel: {
-        marginTop: 16,
+        marginTop: 14,
         paddingVertical: 14,
         alignItems: 'center',
-        backgroundColor: '#F8FBFF',
+        backgroundColor: '#FEF2F2',
         borderRadius: 12,
     },
-    modalCancelText: {
-        fontSize: 16,
-        color: Colors.error,
-        fontWeight: 'bold',
-    },
+    modalCancelText: { fontSize: 15, color: ERROR, fontWeight: 'bold' },
 });
 
 export default ProfileScreen;

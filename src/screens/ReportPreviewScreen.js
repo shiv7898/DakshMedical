@@ -86,32 +86,56 @@ const ReportPreviewScreen = () => {
             const summary = calculateSummary();
             const dateStr = new Date().toLocaleDateString('en-IN');
 
-            const tableRows = logs.map(log => {
-                const ahiVal = log.ahi !== null && log.ahi !== undefined ? log.ahi : '--';
-                const usageVal = log.usage_hours !== null && log.usage_hours !== undefined ? log.usage_hours : '--';
-                const pAvg = log.pressure_avg !== null && log.pressure_avg !== undefined ? log.pressure_avg : '--';
-                const p95 = log.pressure_95th !== null && log.pressure_95th !== undefined ? log.pressure_95th : '--';
-                const ahiColor = log.ahi > 5 ? '#D32F2F' : '#2E7D32';
+            // Helper: apnea type label
+            const apneaLabel = (log) => {
+                const parts = [];
+                if ((log.obstructive_count || 0) > 0) parts.push(`OA:${log.obstructive_count}`);
+                if ((log.central_count || 0) > 0) parts.push(`CA:${log.central_count}`);
+                if ((log.hypopnea_count || 0) > 0) parts.push(`H:${log.hypopnea_count}`);
+                return parts.length > 0 ? parts.join(' / ') : '0';
+            };
 
+            // Compliance breakdown
+            const compliantDayCount = logs.filter(l => (l.usage_hours || 0) >= 4).length;
+            const nonCompliantDayCount = logs.length - compliantDayCount;
+
+            // Build therapy table rows
+            const tableRows = logs.map((log, idx) => {
+                const ahiColor = (log.ahi || 0) > 5 ? '#D32F2F' : '#1E7E34';
+                const isCompliant = (log.usage_hours || 0) >= 4;
+                const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F3F8FF';
+                const usageBadge = isCompliant
+                    ? `<span style="background:#E8F5E9;color:#2E7D32;padding:2px 5px;border-radius:3px;font-size:9px;font-weight:bold;">&ge;4h &#10003;</span>`
+                    : `<span style="background:#FFF3E0;color:#E65100;padding:2px 5px;border-radius:3px;font-size:9px;font-weight:bold;">&lt;4h</span>`;
+                const maskFault = (log.mask_fault_count || 0);
+                const maskColor = maskFault > 0 ? '#D32F2F' : '#555';
+                const apneaStr = apneaLabel(log);
                 return `
-                    <tr style="border-bottom: 1px solid #E3F2FD;">
-                        <td style="padding: 8px 10px;">${log.date || '--'}</td>
-                        <td style="padding: 8px 10px; font-weight: bold;">${usageVal}${usageVal !== '--' ? 'h' : ''}</td>
-                        <td style="padding: 8px 10px; color: ${ahiColor}; font-weight: bold;">${ahiVal}</td>
-                        <td style="padding: 8px 10px;">${pAvg}</td>
-                        <td style="padding: 8px 10px; color: #1E88E5;">${p95}</td>
+                    <tr style="background:${rowBg};">
+                        <td>${log.date || '--'}</td>
+                        <td>${(log.usage_hours || 0)} ${usageBadge}</td>
+                        <td>${log.therapy_type || 'CPAP'}</td>
+                        <td>${(log.avg_set_pressure || 0)}</td>
+                        <td>${(log.pressure_avg || 0)}</td>
+                        <td style="color:#1E88E5;font-weight:bold;">${(log.pressure_95th || 0)}</td>
+                        <td>${(log.avg_flow || 0)}</td>
+                        <td>${(log.leak_rate || 0)}</td>
+                        <td>${(log.avg_resp_rate || 0)}</td>
+                        <td style="color:${ahiColor};font-weight:bold;">${(log.ahi || 0)}</td>
+                        <td>${apneaStr}</td>
+                        <td style="color:${maskColor};font-weight:bold;">${maskFault}</td>
                     </tr>
                 `;
             }).join('');
 
-            // Build graph sections - each with page-break-inside avoid
+            // Build graph section helper
             const graphSection = (title, imgBase64) => {
                 if (!imgBase64) return '';
                 return `
-                    <div style="page-break-inside: avoid; margin-bottom: 20px;">
-                        <h4 style="color: #1E88E5; margin: 10px 0 5px 0;">${title}</h4>
-                        <div style="text-align: center;">
-                            <img src="data:image/jpeg;base64,${imgBase64}" style="width: 100%; max-width: 520px; border-radius: 8px;" />
+                    <div style="page-break-inside:avoid; margin-bottom:22px;">
+                        <div style="font-size:12px;font-weight:bold;color:#1565C0;border-left:4px solid #1E88E5;padding-left:8px;margin-bottom:8px;">${title}</div>
+                        <div style="text-align:center;">
+                            <img src="data:image/jpeg;base64,${imgBase64}" style="width:100%;max-width:520px;border-radius:8px;border:1px solid #E3F2FD;" />
                         </div>
                     </div>
                 `;
@@ -119,185 +143,265 @@ const ReportPreviewScreen = () => {
 
             const hasGraphs = ahiImg || usageImg || leakImg;
 
-            const htmlContent = `
+            const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        padding: 40px;
-        color: #000;
-        font-size: 12px;
-    }
-
-    h1 {
-        text-align: center;
-        font-size: 20px;
-        margin-bottom: 30px;
-    }
-
-    .section {
-        margin-bottom: 20px;
-    }
-
-    .divider {
-        border-bottom: 1px solid #ccc;
-        margin: 10px 0 20px 0;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-    }
-
-    td {
-        padding: 4px 6px;
-        vertical-align: top;
-    }
-
-    .label {
-        font-weight: bold;
-        width: 150px;
-    }
-
-    .stat-table td {
-        padding: 6px;
-    }
-
-    .stat-title {
-        font-weight: bold;
-        margin-top: 20px;
-        margin-bottom: 10px;
-    }
-
-    .center-text {
-        text-align: center;
-    }
-
-    .border-table {
-        width: 100%;
-        border: 1px solid #000;
-        border-collapse: collapse;
-        margin-top: 10px;
-    }
-
-    .border-table th,
-    .border-table td {
-        border: 1px solid #000;
-        padding: 6px;
-        text-align: center;
-    }
-
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;}
+.page1{padding:34px 38px 28px 38px;page-break-after:always;}
+.page2{padding:34px 38px 38px 38px;}
+.hdr-banner{
+    background:linear-gradient(135deg,#1565C0 0%,#1E88E5 60%,#42A5F5 100%);
+    color:#fff;padding:16px 22px;border-radius:10px;margin-bottom:18px;
+    display:flex;align-items:center;justify-content:space-between;
+}
+.hdr-banner h1{font-size:20px;font-weight:bold;letter-spacing:1px;}
+.hdr-banner .hdr-sub{font-size:10px;margin-top:3px;opacity:0.88;}
+.hdr-right{text-align:right;font-size:10px;opacity:0.9;line-height:1.7;}
+.sec{margin-top:14px;}
+.sec-title{
+    font-size:12px;font-weight:bold;color:#1565C0;
+    border-left:4px solid #1E88E5;padding-left:8px;margin-bottom:9px;
+}
+.ig{width:100%;border-collapse:collapse;}
+.ig td{padding:4px 7px;font-size:11px;vertical-align:middle;}
+.lbl{color:#607D8B;font-weight:bold;width:130px;white-space:nowrap;}
+.val{color:#1a1a2e;}
+.hr-blue{border:none;border-top:2px solid #1E88E5;margin:14px 0;}
+.hr-dash{border:none;border-top:1.5px dashed #90CAF9;margin:12px 0;}
+.hr-light{border:none;border-top:1px solid #E3F2FD;margin:10px 0;}
+.stats-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.sc{
+    flex:1;min-width:78px;background:#F0F7FF;
+    border:1px solid #BBDEFB;border-radius:8px;padding:9px 6px;text-align:center;
+}
+.sc-v{font-size:17px;font-weight:bold;color:#1565C0;line-height:1.15;}
+.sc-l{font-size:9px;color:#607D8B;margin-top:3px;line-height:1.3;}
+.comp-box{display:flex;gap:10px;margin-bottom:14px;}
+.ci{flex:1;border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:10px;}
+.ci.green{background:#E8F5E9;border:1px solid #A5D6A7;}
+.ci.orange{background:#FFF8E1;border:1px solid #FFE082;}
+.ci-num{font-size:24px;font-weight:bold;}
+.ci.green .ci-num{color:#2E7D32;}
+.ci.orange .ci-num{color:#E65100;}
+.ci-desc{font-size:10px;color:#444;line-height:1.45;}
+.dt{width:100%;border-collapse:collapse;font-size:9.5px;margin-top:6px;}
+.dt th{
+    background:#1565C0;color:#fff;padding:5px 3px;
+    text-align:center;font-size:9px;border:1px solid #1565C0;white-space:nowrap;
+}
+.dt td{border:1px solid #BBDEFB;padding:5px 3px;text-align:center;vertical-align:middle;}
+.p2hdr{
+    background:#F0F7FF;border:1px solid #BBDEFB;border-radius:8px;
+    padding:12px 18px;margin-bottom:18px;
+    display:flex;align-items:center;justify-content:space-between;
+}
+.p2hdr h2{font-size:15px;color:#1565C0;}
+.p2hdr span{font-size:10px;color:#607D8B;}
+.patient-line { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 8px; border-bottom: 2px solid #2196F3; margin-bottom: 8px; }
+.patient-info { display: flex; gap: 25px; }
+.doctor-line { display: flex; gap: 20px; align-items: center; padding: 10px 15px; background: #F8FBFF; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #BBDEFB; }
+.header-item { font-size: 11px; color: #444; }
+.sig-area{
+    margin-top:40px;padding-top:18px;
+    border-top:2px solid #1E88E5;
+    display:flex;justify-content:space-between;align-items:flex-end;
+}
+.sig-blk{text-align:center;}
+.sig-line{border-top:1px solid #333;width:170px;margin:0 auto 5px auto;}
+.sig-lbl{font-size:10px;color:#333;font-weight:bold;}
+.sig-sub{font-size:9px;color:#90A4AE;margin-top:2px;}
+.footer{
+    text-align:center;font-size:9px;color:#90A4AE;
+    margin-top:18px;border-top:1px solid #E3F2FD;padding-top:8px;
+}
 </style>
 </head>
-
 <body>
 
-<h1>Patient Report</h1>
+<!-- ══════════════ PAGE 1 ══════════════ -->
+<div class="page1">
 
-<div class="section">
-    <table>
+<div class="hdr-banner">
+    <div>
+        <h1>&#x1F4CB; Therapy Report</h1>
+        <div class="hdr-sub">Airsine CPAP Clinical Summary</div>
+    </div>
+    <div class="hdr-right">
+        <div><b>Report Date:</b> ${dateStr}</div>
+        <div><b>Total Days:</b> ${logs.length}</div>
+        <div><b>Device:</b> ${patient?.machine_serial || '-'}</div>
+    </div>
+</div>
+
+<!-- Patient & Doctor Info Header -->
+<div class="sec">
+    <div class="patient-line">
+        <div class="patient-info">
+            <div class="header-item"><strong>Patient ID:</strong> ${patient?.patient_custom_id || patient?.id || '-'}</div>
+            <div class="header-item"><strong>Name:</strong> ${patient?.name || 'N/A'}</div>
+            <div class="header-item"><strong>Device:</strong> ${patient?.device_model || 'Standard'}</div>
+        </div>
+    </div>
+    <div class="doctor-line">
+        <div class="header-item"><strong>Physician:</strong> ${patient?.doctor_name || 'N/A'}</div>
+        <div class="header-item" style="border-left: 1px solid #E0E0E0; padding-left: 20px;"><strong>Contact:</strong> ${patient?.doctor_phone || 'N/A'}</div>
+    </div>
+</div>
+
+<!-- Patient Info (Detailed) -->
+<div class="sec">
+    <div class="sec-title">Patient Details</div>
+    <table class="ig">
         <tr>
-            <td class="label">Patient Name:</td>
-            <td>${patient?.name || '-'}</td>
-            <td class="label">Patient ID:</td>
-            <td>${patient?.id || '-'}</td>
+            <td class="lbl">Gender:</td><td class="val">${patient?.gender || '-'}</td>
+            <td class="lbl">Date of Birth:</td><td class="val">${patient?.dob || '-'}</td>
         </tr>
         <tr>
-            <td class="label">Gender:</td>
-            <td>${patient?.gender || '-'}</td>
-            <td class="label">Phone:</td>
-            <td>${patient?.phone || '-'}</td>
+            <td class="lbl">Phone:</td><td class="val">${patient?.phone || '-'}</td>
+            <td class="lbl">Email:</td><td class="val">${patient?.email || '-'}</td>
         </tr>
         <tr>
-            <td class="label">Birthday:</td>
-            <td>${patient?.dob || '-'}</td>
-            <td class="label">Email:</td>
-            <td>${patient?.email || '-'}</td>
-        </tr>
-        <tr>
-            <td class="label">Device Model:</td>
-            <td>${patient?.device_model || '-'}</td>
-            <td class="label">Device SN:</td>
-            <td>${patient?.machine_serial || '-'}</td>
-         
-        </tr>
-        <tr>
-            <td class="label">Doctor Name:</td>
-            <td>${'-'}</td>
-            <td class="label">Doctor Phone:</td>
-            <td>${'-'}</td>
+            <td class="lbl">Device Model:</td><td class="val">${patient?.device_model || '-'}</td>
+            <td class="lbl">Device Serial No:</td><td class="val">${patient?.machine_serial || '-'}</td>
         </tr>
     </table>
 </div>
 
-<div class="divider"></div>
-
-<div class="section">
-    <div class="stat-title">Statistical Information</div>
-
-    <table class="stat-table">
+<!-- Doctor section — separated by dashed line -->
+<hr class="hr-dash"/>
+<div class="sec">
+    <div class="sec-title">Referring Physician</div>
+    <table class="ig">
         <tr>
-            <td class="label">Selected Days:</td>
-            <td>${summary?.totalDays || 0} Days</td>
-            <td class="label">Total Usage:</td>
-            <td>${summary?.avgUsage || 0} Hours</td>
-        </tr>
-        <tr>
-            <td class="label">Compliance:</td>
-            <td>${summary?.compliancePct || 0}%</td>
-            <td class="label">Avg AHI:</td>
-            <td>${summary?.avgAHI || 0}</td>
-        </tr>
-        <tr>
-            <td class="label">Avg P95 Pressure:</td>
-            <td>${summary?.avgP95 || 0}</td>
-            <td></td>
-            <td></td>
+            <td class="lbl">Doctor Name:</td><td class="val">${patient?.doctor_name || '-'}</td>
+            <td class="lbl">Doctor Phone:</td><td class="val">${patient?.doctor_phone || '-'}</td>
         </tr>
     </table>
 </div>
 
-<div class="divider"></div>
+<hr class="hr-blue"/>
 
-<div class="section">
-    <div class="stat-title">Daily Usage Log</div>
+<!-- Therapy Summary Cards -->
+<div class="sec">
+    <div class="sec-title">Therapy Summary</div>
+    <div class="stats-row">
+        <div class="sc">
+            <div class="sc-v">${summary?.avgUsage || 0}h</div>
+            <div class="sc-l">Avg Daily Usage</div>
+        </div>
+        <div class="sc">
+            <div class="sc-v">${summary?.compliancePct || 0}%</div>
+            <div class="sc-l">Compliance Rate</div>
+        </div>
+        <div class="sc">
+            <div class="sc-v">${summary?.avgAHI || 0}</div>
+            <div class="sc-l">Avg AHI<br/>(events/hr)</div>
+        </div>
+        <div class="sc">
+            <div class="sc-v">${summary?.avgP95 || 0}</div>
+            <div class="sc-l">Avg 95th%<br/>Pressure</div>
+        </div>
+        <div class="sc">
+            <div class="sc-v">${logs.length}</div>
+            <div class="sc-l">Days Recorded</div>
+        </div>
+    </div>
+</div>
 
-    <table class="border-table">
+<!-- Compliance Breakdown -->
+<div class="sec">
+    <div class="sec-title">Usage Compliance Breakdown</div>
+    <div class="comp-box">
+        <div class="ci green">
+            <div style="font-size:22px;">&#10003;</div>
+            <div>
+                <div class="ci-num">${compliantDayCount}</div>
+                <div class="ci-desc"><b>Days &ge; 4 Hours</b><br/>Compliant (Medicare standard)</div>
+            </div>
+        </div>
+        <div class="ci orange">
+            <div style="font-size:22px;">&#9888;</div>
+            <div>
+                <div class="ci-num">${nonCompliantDayCount}</div>
+                <div class="ci-desc"><b>Days &lt; 4 Hours</b><br/>Non-compliant (below threshold)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr class="hr-light"/>
+
+<!-- Daily Therapy Log Table -->
+<div class="sec">
+    <div class="sec-title">Daily Therapy Log</div>
+    <table class="dt">
         <thead>
             <tr>
                 <th>Date</th>
                 <th>Usage (h)</th>
+                <th>Mode</th>
+                <th>Set Press<br/>(cmH&#8322;O)</th>
+                <th>Meas Press<br/>(cmH&#8322;O)</th>
+                <th>P95<br/>(cmH&#8322;O)</th>
+                <th>Flow<br/>(L/min)</th>
+                <th>Leak<br/>(L/min)</th>
+                <th>Resp<br/>Rate</th>
                 <th>AHI</th>
-                <th>Avg Pressure</th>
-                <th>95% Pressure</th>
+                <th>Apnea<br/>(OA/CA/H)</th>
+                <th>Mask<br/>Fault</th>
             </tr>
         </thead>
-        <tbody>
-            ${logs.map(log => `
-                <tr>
-                    <td>${log.date || '-'}</td>
-                    <td>${log.usage_hours || 0}</td>
-                    <td>${log.ahi || 0}</td>
-                    <td>${log.pressure_avg || 0}</td>
-                    <td>${log.pressure_95th || 0}</td>
-                </tr>
-            `).join('')}
-        </tbody>
+        <tbody>${tableRows}</tbody>
     </table>
+</div>
 
-                    ${hasGraphs ? `
-                    <div class="graphs-section">
-                        <h3>Clinical Trends</h3>
-                        ${graphSection('Pressure vs Time (cmH₂O)', ahiImg)}
-                        ${graphSection('Flow vs Time (Usage)', usageImg)}
-                        ${graphSection('Last 7 Days (Mask Off, Apnea, High Leak)', leakImg)}
-                    </div>
-                    ` : ''}
-                </body>
-                </html>
-            `;
+</div>
+<!-- ══════════════ END PAGE 1 ══════════════ -->
+
+<!-- ══════════════ PAGE 2 — Graphs & Signature ══════════════ -->
+<div class="page2">
+    <div class="p2hdr">
+        <h2>&#x1F4C8; Clinical Trend Graphs</h2>
+        <span>Patient: ${patient?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
+    </div>
+
+    ${hasGraphs ? `
+        ${graphSection('Pressure vs Time (cmH\u2082O)', ahiImg)}
+        ${graphSection('Flow vs Time \u2014 Daily Usage (L/min)', usageImg)}
+        ${graphSection('Apnea &amp; Leak Overview \u2014 Last 7 Days', leakImg)}
+    ` : '<div style="text-align:center;padding:60px;color:#90A4AE;font-size:13px;">No graphs available.</div>'}
+
+    <!-- Doctor Signature -->
+    <div class="sig-area">
+        <div class="sig-blk">
+            <div class="sig-line"></div>
+            <div class="sig-lbl">Authorised Physician</div>
+            <div class="sig-sub">${patient?.doctor_name || 'Doctor Name'}</div>
+            <div class="sig-sub">${patient?.doctor_phone || ''}</div>
+        </div>
+        <div class="sig-blk">
+            <div class="sig-line"></div>
+            <div class="sig-lbl">Date &amp; Stamp</div>
+            <div class="sig-sub">${dateStr}</div>
+        </div>
+        <div class="sig-blk">
+            <div class="sig-line"></div>
+            <div class="sig-lbl">Patient / Guardian Signature</div>
+            <div class="sig-sub">${patient?.name || '-'}</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Airsine CPAP Therapy Management System &nbsp;|&nbsp; Confidential – For Medical Use Only
+        &nbsp;|&nbsp; Device SN: ${patient?.machine_serial || '-'} &nbsp;|&nbsp; ${dateStr}
+    </div>
+</div>
+
+</body>
+</html>`;
 
             const results = await createPDF({
                 html: htmlContent,
@@ -320,7 +424,6 @@ const ReportPreviewScreen = () => {
 
             try {
                 await RNFS.copyFile(results.filePath, downloadPath);
-                // Open PDF for preview after saving
                 Alert.alert(
                     '✅ Report Downloaded!',
                     `PDF saved to Downloads folder:\n${fileName}`,
@@ -330,7 +433,6 @@ const ReportPreviewScreen = () => {
                             text: 'Open PDF',
                             onPress: () => {
                                 Linking.openURL('file://' + downloadPath).catch(() => {
-                                    // Try content URI if file URI fails
                                     Linking.openURL('content://' + downloadPath).catch(() => { });
                                 });
                             }
@@ -338,7 +440,6 @@ const ReportPreviewScreen = () => {
                     ]
                 );
             } catch (copyErr) {
-                // If copy to Downloads fails, still show success with original path
                 Alert.alert(
                     '✅ Report Generated!',
                     `PDF saved at:\n${results.filePath}`,
@@ -443,6 +544,7 @@ const ReportPreviewScreen = () => {
                 </ViewShot>
             </View>
 
+            <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Therapy Report</Text>
             </View>
@@ -513,14 +615,17 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: Spacing.xl,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
-        paddingBottom: Spacing.m,
-        backgroundColor: '#FFF',
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: Colors.primary,
     },
     headerTitle: {
-        ...Typography.subheader,
-        fontSize: 20,
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
     },
     content: {
         padding: Spacing.xl,

@@ -120,9 +120,10 @@ const ImportLogScreen = ({ route, navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Icon name="arrow-left" size={24} color={Colors.text} />
+                    <Icon name="arrow-left" size={24} color="#FFF" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Import Log</Text>
                 <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
@@ -182,12 +183,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: Spacing.m,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
-        paddingBottom: 10,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: Colors.primary,
     },
     headerTitle: {
-        ...Typography.subheader,
         fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
         flex: 1,
         marginLeft: 10,
     },
@@ -198,12 +201,10 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         paddingHorizontal: 15,
         borderRadius: 12,
-        backgroundColor: '#F3F9FF',
-        borderWidth: 1,
-        borderColor: '#E3F2FD',
+        backgroundColor: 'rgba(255,255,255,0.18)',
     },
     skipText: {
-        color: Colors.primary,
+        color: '#FFFFFF',
         fontWeight: 'bold',
         fontSize: 12,
     },

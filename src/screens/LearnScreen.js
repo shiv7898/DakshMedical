@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, StatusBar, Platform } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Colors } from '../styles/theme';
 
 const LearnScreen = () => {
     const courses = [
@@ -10,8 +12,11 @@ const LearnScreen = () => {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#1565C0" />
+            <View style={styles.header}>
+                <Text style={styles.headerTitle}>Learning Library</Text>
+            </View>
             <View style={styles.content}>
-                <Text style={styles.title}>Learning Library</Text>
                 <FlatList
                     data={courses}
                     keyExtractor={(item) => item.id}
@@ -21,7 +26,9 @@ const LearnScreen = () => {
                                 <Text style={styles.courseTitle}>{item.title}</Text>
                                 <Text style={styles.courseDuration}>{item.duration}</Text>
                             </View>
-                            <View style={styles.playButton} />
+                            <View style={styles.playButton}>
+                                <Icon name="play" size={20} color="#0066FF" />
+                            </View>
                         </TouchableOpacity>
                     )}
                 />
@@ -35,14 +42,21 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F7FA',
     },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: '#1565C0',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+    },
     content: {
         padding: 20,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1A1C1E',
-        marginBottom: 20,
     },
     courseCard: {
         backgroundColor: '#FFFFFF',

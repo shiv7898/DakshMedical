@@ -98,19 +98,20 @@ const HistoryScreen = () => {
                         {parseFloat(item.usage_hours) >= 4 ? "Compliance Met" : "Low Usage"}
                     </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteAction}>
+                {/* <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteAction}>
                     <Icon name="trash-can-outline" size={18} color={Colors.error} />
-                </TouchableOpacity>
+                </TouchableOpacity> */}
             </View>
         </View>
     );
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Therapy Logs</Text>
                 <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn}>
-                    <Icon name="refresh" size={22} color={Colors.primary} />
+                    <Icon name="refresh" size={22} color="#FFF" />
                 </TouchableOpacity>
             </View>
 
@@ -142,15 +143,14 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: Spacing.m,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
-        paddingBottom: 15,
-        backgroundColor: '#FFF',
-        elevation: 2,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: Colors.primary,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.text,
+        color: '#FFFFFF',
     },
     refreshBtn: {
         padding: 5,

@@ -1,12 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, StatusBar, Platform } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Colors } from '../styles/theme';
 
 const CoachingScreen = () => {
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#1565C0" />
+            <View style={styles.header}>
+                <Text style={styles.headerTitle}>Mentors & Coaching</Text>
+            </View>
             <View style={styles.content}>
-                <Text style={styles.title}>Coaching & Mentors</Text>
-
                 <View style={styles.coachCard}>
                     <View style={styles.avatarPlaceholder} />
                     <View style={styles.coachInfo}>
@@ -38,14 +42,21 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F7FA',
     },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: '#1565C0',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+    },
     content: {
         padding: 20,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1A1C1E',
-        marginBottom: 20,
     },
     coachCard: {
         backgroundColor: '#FFFFFF',

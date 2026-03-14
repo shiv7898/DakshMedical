@@ -32,9 +32,10 @@ const MachineSelectionScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Icon name="close" size={24} color={Colors.text} />
+                    <Icon name="close" size={24} color="#FFF" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Select Device</Text>
                 <View style={{ width: 24 }} />
@@ -65,12 +66,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: Spacing.m,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
-        paddingBottom: 10,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
+        paddingBottom: 14,
+        backgroundColor: Colors.primary,
     },
     headerTitle: {
-        ...Typography.subheader,
         fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
     },
     content: {
         flex: 1,
