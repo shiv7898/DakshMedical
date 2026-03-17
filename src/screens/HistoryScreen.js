@@ -82,7 +82,7 @@ const HistoryScreen = () => {
                     </View>
                     <View style={styles.metricsRow}>
                         <MetricItem label="Avg Press" value={item.pressure_avg} unit="cm" />
-                        <MetricItem label="95% Press" value={item.pressure_95th} unit="cm" color="#7B1FA2" />
+                        <View style={{ flex: 1 }} />
                     </View>
                 </View>
             </View>

@@ -128,33 +128,41 @@ const parseNewDeviceFormat = (rawText) => {
         const durationSec = (lastOn.getTime() - firstOn.getTime()) / 1000;
         const usageHours = parseFloat((durationSec / 3600).toFixed(2));
 
-        // ── Pressures (only ON rows, non-zero) ────────────────────────────────
-        const pressures = onRows
-            .map(r => r.measure_pressure)
-            .filter(v => v > 0)
-            .sort((a, b) => a - b);
+        // ── Filter rows for Clinical Averages (Pressure, Flow, Leak, Resp) ────
+        // 1. Exclude if leak > 200
+        // 2. Exclude if mask_fault === 1 (Open Mask)
+        // 3. Include therapy_status === 0 (OFF)
+        // 4. Include 0 values for sum and divisor
+        const validAvgRows = dayRows.filter(r => r.leak <= 200 && r.mask_fault === 0);
 
+        // ── Pressures ────────────────────────────────────────────────────────
+        const pressures = validAvgRows.map(r => r.measure_pressure).sort((a, b) => a - b);
         const pressureMin = pressures.length > 0 ? pressures[0] : 0;
         const pressureMax = pressures.length > 0 ? pressures[pressures.length - 1] : 0;
         const pressureAvg = pressures.length > 0
             ? parseFloat((pressures.reduce((s, v) => s + v, 0) / pressures.length).toFixed(2))
             : 0;
-        const pressure95th = parseFloat(percentile(pressures, 0.95).toFixed(2));
+        console.log("pressureAvg", pressureAvg);
+        console.log("pressureMax", pressureMax);
+        console.log("pressureMin", pressureMin);
+        console.log("pressures", pressures);
+
+
 
         // Avg set pressure
-        const setPressures = onRows.map(r => r.avg_set_pressure).filter(v => v > 0);
+        const setPressures = validAvgRows.map(r => r.avg_set_pressure);
         const avgSetPressure = setPressures.length > 0
             ? parseFloat((setPressures.reduce((s, v) => s + v, 0) / setPressures.length).toFixed(2))
             : 0;
 
         // ── Flow ──────────────────────────────────────────────────────────────
-        const flows = onRows.map(r => r.flow).filter(v => v > 0);
+        const flows = validAvgRows.map(r => r.flow);
         const avgFlow = flows.length > 0
             ? parseFloat((flows.reduce((s, v) => s + v, 0) / flows.length).toFixed(2))
             : 0;
 
         // ── Leak ──────────────────────────────────────────────────────────────
-        const leaks = onRows.map(r => r.leak);
+        const leaks = validAvgRows.map(r => r.leak);
         const leakAvg = leaks.length > 0
             ? parseFloat((leaks.reduce((s, v) => s + v, 0) / leaks.length).toFixed(2))
             : 0;
@@ -164,40 +172,36 @@ const parseNewDeviceFormat = (rawText) => {
             : 0;
 
         // ── Respiratory Rate ──────────────────────────────────────────────────
-        const respRates = onRows.map(r => r.resp_rate).filter(v => v > 0);
+        const respRates = validAvgRows.map(r => r.resp_rate);
         const avgRespRate = respRates.length > 0
             ? parseFloat((respRates.reduce((s, v) => s + v, 0) / respRates.length).toFixed(2))
             : 0;
 
-        // ── Apnea events (rows where apnea_detect === 1) ──────────────────────
-        const apneaRows = onRows.filter(r => r.apnea_detect === 1);
-
+        // ── Apnea events (Exclude if leak > 200) ──────────────────────────────
+        // Rules:
+        // 1. Exclude if leak > 200
+        // 2. Divide by total rows that passed the filter
+        const validAhiRows = dayRows.filter(r => r.leak <= 200);
+        const apneaRows = validAhiRows.filter(r => r.apnea_detect === 1);
         const apneaCount = apneaRows.length;
 
-
-
-        // Count by type
+        // Count by type (within valid rows)
         const obstructiveCount = apneaRows.filter(r => r.apnea_type === 1).length;
         const centralCount = apneaRows.filter(r => r.apnea_type === 2).length;
         const hypopneaCount = apneaRows.filter(r => r.apnea_type === 3).length;
 
-        // AHI = total apnea events / usage hours
-        const ahi = usageHours > 0
-            ? parseFloat((apneaCount / usageHours).toFixed(1))
-            : 0;
-
-        // CAI (central apnea index)
-        const cai = usageHours > 0
-            ? parseFloat((centralCount / usageHours).toFixed(1))
-            : 0;
-
-        // OAI (obstructive apnea index)
-        const oai = usageHours > 0
-            ? parseFloat((obstructiveCount / usageHours).toFixed(1))
-            : 0;
+        // AHI = apneaCount / totalValidAhiRows
+        // Using 3 decimal places for row-based ratio accuracy
+        const totalAhiRows = validAhiRows.length;
+        const ahi = totalAhiRows > 0 ? parseFloat((apneaCount / usageHours).toFixed(2)) : 0;
+        const cai = totalAhiRows > 0 ? parseFloat((centralCount / usageHours).toFixed(3)) : 0;
+        const oai = totalAhiRows > 0 ? parseFloat((obstructiveCount / usageHours).toFixed(3)) : 0;
 
         // ── Mask fault (open mask) ────────────────────────────────────────────
         const maskFaultCount = onRows.filter(r => r.mask_fault === 1).length;
+        const maskOffCount = onRows.filter(r => r.mask_fault === 0).length;
+        console.log(`[${date}] Mask Fault Count (1): ${maskFaultCount}`);
+        console.log(`[${date}] Mask Off Count (0): ${maskOffCount}`);
 
         // ── Therapy type (majority vote) ──────────────────────────────────────
         const cpapCount = onRows.filter(r => r.therapy_select === 1).length;
@@ -218,7 +222,7 @@ const parseNewDeviceFormat = (rawText) => {
             'Pressure Min': pressureMin,
             'Pressure Max': pressureMax,
             'Pressure Avg': pressureAvg,
-            'Pressure 95th': pressure95th,
+
             'Avg Flow': avgFlow,
             'Leak Avg': leakAvg,
             'Large Leak %': largeLeakPercent,
@@ -240,7 +244,7 @@ const parseNewDeviceFormat = (rawText) => {
             pressure_min: pressureMin,
             pressure_max: pressureMax,
             pressure_avg: pressureAvg,
-            pressure_95th: pressure95th,
+
             avg_flow: avgFlow,
             leak_rate: leakAvg,
             large_leak_percent: largeLeakPercent,
@@ -253,6 +257,7 @@ const parseNewDeviceFormat = (rawText) => {
             central_count: centralCount,
             hypopnea_count: hypopneaCount,
             mask_fault_count: maskFaultCount,
+            mask_off_count: maskOffCount,
             compliance_percent: compliancePercent,
         });
     }
@@ -335,7 +340,7 @@ const processRawLogs = (data) => {
         const pressureAvg = parseFloat((pressures.reduce((s, a) => s + a, 0) / pressures.length).toFixed(1));
         const pressureMax = pressures[pressures.length - 1];
         const pressureMin = pressures[0];
-        const pressure95th = percentile(pressures, 0.95);
+
 
         const leaks = dayData.map(row => { const v = getVal(row, 'Leak_Lmin'); return typeof v === 'number' ? v : parseFloat(v) || 0; });
         const leakAvg = leaks.length > 0 ? parseFloat((leaks.reduce((s, a) => s + a, 0) / leaks.length).toFixed(1)) : 0;
@@ -434,7 +439,7 @@ export const parseCSV = (fileContent) => {
                                         pressure_min: parseFloat(get('pressuremin') || 0),
                                         pressure_max: pMax,
                                         pressure_avg: parseFloat(get('pressureavg') || 0),
-                                        pressure_95th: p95Val !== undefined ? parseFloat(p95Val) : parseFloat((pMax * 0.95).toFixed(1)),
+
                                     };
                                 });
 

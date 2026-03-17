@@ -17,7 +17,8 @@ import { Colors, Spacing, Typography } from '../styles/theme';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { generatePDF as createPDF } from 'react-native-html-to-pdf';
 import ViewShot from 'react-native-view-shot';
-import { LineChart, BarChart } from 'react-native-chart-kit';
+import Share from 'react-native-share';
+import { LineChart, BarChart, StackedBarChart } from 'react-native-chart-kit';
 import RNFS from 'react-native-fs';
 import { getLogs, getPatientInfo } from '../api/database';
 
@@ -27,19 +28,26 @@ const ReportPreviewScreen = () => {
     const [logs, setLogs] = useState([]);
     const [patient, setPatient] = useState(null);
     const [generating, setGenerating] = useState(false);
-    const ahiChartRef = useRef(null);
-    const usageChartRef = useRef(null);
-    const leakChartRef = useRef(null);
+    const pressureChartRef = useRef(null);
+    const flowChartRef = useRef(null);
+    const ahiMiniChartRef = useRef(null);
+    const leakMiniChartRef = useRef(null);
+    const maskMiniChartRef = useRef(null);
 
     useEffect(() => {
         fetchData();
     }, []);
 
     const fetchData = async () => {
-        const logData = await getLogs();
-        const patientData = await getPatientInfo();
-        setLogs(logData);
-        setPatient(patientData || { name: 'Daksh Singh', age: 32, machine_serial: 'AIR-9922-G3' });
+        try {
+            const logData = await getLogs();
+            const patientData = await getPatientInfo();
+            setLogs(logData || []);
+            setPatient(patientData || { name: 'Daksh Singh', age: 32, machine_serial: 'AIR-9922-G3' });
+        } catch (error) {
+            console.error('Error fetching data for report:', error);
+            setLogs([]);
+        }
     };
 
     const calculateSummary = () => {
@@ -53,9 +61,9 @@ const ReportPreviewScreen = () => {
 
         const avgUsage = (validLogs.reduce((acc, curr) => acc + (parseFloat(curr.usage_hours) || 0), 0) / totalDays).toFixed(1);
         const avgAHI = (validLogs.reduce((acc, curr) => acc + (parseFloat(curr.ahi) || 0), 0) / totalDays).toFixed(1);
-        const avgP95 = (validLogs.reduce((acc, curr) => acc + (parseFloat(curr.pressure_95th) || 0), 0) / totalDays).toFixed(1);
+        const avgPressure = (validLogs.reduce((acc, curr) => acc + (parseFloat(curr.pressure_avg) || 0), 0) / totalDays).toFixed(1);
 
-        return { totalDays, compliantDays, compliancePct, avgUsage, avgAHI, avgP95 };
+        return { totalDays, compliantDays, compliancePct, avgUsage, avgAHI, avgPressure };
     };
 
     // Capture a single chart ref safely
@@ -79,9 +87,11 @@ const ReportPreviewScreen = () => {
         setGenerating(true);
         try {
             // Capture each graph separately
-            const ahiImg = await captureChart(ahiChartRef);
-            const usageImg = await captureChart(usageChartRef);
-            const leakImg = await captureChart(leakChartRef);
+            const pressureImg = await captureChart(pressureChartRef);
+            const flowImg = await captureChart(flowChartRef);
+            const ahiImg = await captureChart(ahiMiniChartRef);
+            const leakImg = await captureChart(leakMiniChartRef);
+            const maskImg = await captureChart(maskMiniChartRef);
 
             const summary = calculateSummary();
             const dateStr = new Date().toLocaleDateString('en-IN');
@@ -107,8 +117,8 @@ const ReportPreviewScreen = () => {
                 const usageBadge = isCompliant
                     ? `<span style="background:#E8F5E9;color:#2E7D32;padding:2px 5px;border-radius:3px;font-size:9px;font-weight:bold;">&ge;4h &#10003;</span>`
                     : `<span style="background:#FFF3E0;color:#E65100;padding:2px 5px;border-radius:3px;font-size:9px;font-weight:bold;">&lt;4h</span>`;
-                const maskFault = (log.mask_fault_count || 0);
-                const maskColor = maskFault > 0 ? '#D32F2F' : '#555';
+                const maskOff = (log.mask_off_count || 0);
+                const maskColor = maskOff > 0 ? '#D32F2F' : '#555';
                 const apneaStr = apneaLabel(log);
                 return `
                     <tr style="background:${rowBg};">
@@ -117,13 +127,12 @@ const ReportPreviewScreen = () => {
                         <td>${log.therapy_type || 'CPAP'}</td>
                         <td>${(log.avg_set_pressure || 0)}</td>
                         <td>${(log.pressure_avg || 0)}</td>
-                        <td style="color:#1E88E5;font-weight:bold;">${(log.pressure_95th || 0)}</td>
                         <td>${(log.avg_flow || 0)}</td>
                         <td>${(log.leak_rate || 0)}</td>
                         <td>${(log.avg_resp_rate || 0)}</td>
                         <td style="color:${ahiColor};font-weight:bold;">${(log.ahi || 0)}</td>
                         <td>${apneaStr}</td>
-                        <td style="color:${maskColor};font-weight:bold;">${maskFault}</td>
+                        <td style="color:${maskColor};font-weight:bold;">${maskOff}</td>
                     </tr>
                 `;
             }).join('');
@@ -132,16 +141,16 @@ const ReportPreviewScreen = () => {
             const graphSection = (title, imgBase64) => {
                 if (!imgBase64) return '';
                 return `
-                    <div style="page-break-inside:avoid; margin-bottom:22px;">
-                        <div style="font-size:12px;font-weight:bold;color:#1565C0;border-left:4px solid #1E88E5;padding-left:8px;margin-bottom:8px;">${title}</div>
+                    <div style="page-break-inside:avoid; margin-bottom:26px; background:#fff; border:1px solid #edf2f7; border-radius:12px; padding:15px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="font-size:13px; font-weight:bold; color:#1e293b; border-left:4px solid #3b82f6; padding-left:10px; margin-bottom:12px;">${title}</div>
                         <div style="text-align:center;">
-                            <img src="data:image/jpeg;base64,${imgBase64}" style="width:100%;max-width:520px;border-radius:8px;border:1px solid #E3F2FD;" />
+                            <img src="data:image/jpeg;base64,${imgBase64}" style="width:100%; max-width:420px; border-radius:6px;" />
                         </div>
                     </div>
                 `;
             };
 
-            const hasGraphs = ahiImg || usageImg || leakImg;
+            const hasGraphs = pressureImg || flowImg || ahiImg || leakImg || maskImg;
 
             const htmlContent = `<!DOCTYPE html>
 <html>
@@ -151,7 +160,8 @@ const ReportPreviewScreen = () => {
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;}
 .page1{padding:34px 38px 28px 38px;page-break-after:always;}
-.page2{padding:34px 38px 38px 38px;}
+.page2{padding:34px 38px 28px 38px;page-break-after:always;}
+.page3{padding:34px 38px 28px 38px;}
 .hdr-banner{
     background:linear-gradient(135deg,#1565C0 0%,#1E88E5 60%,#42A5F5 100%);
     color:#fff;padding:16px 22px;border-radius:10px;margin-bottom:18px;
@@ -236,25 +246,16 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
     </div>
 </div>
 
-<!-- Patient & Doctor Info Header -->
-<div class="sec">
-    <div class="patient-line">
-        <div class="patient-info">
-            <div class="header-item"><strong>Patient ID:</strong> ${patient?.patient_custom_id || patient?.id || '-'}</div>
-            <div class="header-item"><strong>Name:</strong> ${patient?.name || 'N/A'}</div>
-            <div class="header-item"><strong>Device:</strong> ${patient?.device_model || 'Standard'}</div>
-        </div>
-    </div>
-    <div class="doctor-line">
-        <div class="header-item"><strong>Physician:</strong> ${patient?.doctor_name || 'N/A'}</div>
-        <div class="header-item" style="border-left: 1px solid #E0E0E0; padding-left: 20px;"><strong>Contact:</strong> ${patient?.doctor_phone || 'N/A'}</div>
-    </div>
-</div>
+<!-- Patient Info Header -->
 
 <!-- Patient Info (Detailed) -->
 <div class="sec">
     <div class="sec-title">Patient Details</div>
     <table class="ig">
+        <tr>
+            <td class="lbl">Patient ID:</td><td class="val">P-${patient?.patient_custom_id || patient?.id || '-'}</td>
+            <td class="lbl">Full Name:</td><td class="val">${patient?.name || 'N/A'}</td>
+        </tr>
         <tr>
             <td class="lbl">Gender:</td><td class="val">${patient?.gender || '-'}</td>
             <td class="lbl">Date of Birth:</td><td class="val">${patient?.dob || '-'}</td>
@@ -301,8 +302,8 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
             <div class="sc-l">Avg AHI<br/>(events/hr)</div>
         </div>
         <div class="sc">
-            <div class="sc-v">${summary?.avgP95 || 0}</div>
-            <div class="sc-l">Avg 95th%<br/>Pressure</div>
+            <div class="sc-v">${summary?.avgPressure || 0}</div>
+            <div class="sc-l">Avg Pressure<br/>(cmH&#8322;O)</div>
         </div>
         <div class="sc">
             <div class="sc-v">${logs.length}</div>
@@ -345,7 +346,6 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                 <th>Mode</th>
                 <th>Set Press<br/>(cmH&#8322;O)</th>
                 <th>Meas Press<br/>(cmH&#8322;O)</th>
-                <th>P95<br/>(cmH&#8322;O)</th>
                 <th>Flow<br/>(L/min)</th>
                 <th>Leak<br/>(L/min)</th>
                 <th>Resp<br/>Rate</th>
@@ -361,18 +361,31 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 </div>
 <!-- ══════════════ END PAGE 1 ══════════════ -->
 
-<!-- ══════════════ PAGE 2 — Graphs & Signature ══════════════ -->
+<!-- ══════════════ PAGE 2 — Pressure & Flow Trends ══════════════ -->
 <div class="page2">
     <div class="p2hdr">
-        <h2>&#x1F4C8; Clinical Trend Graphs</h2>
+        <h2>&#x1F4C8; Respiratory Trends (Part 1)</h2>
         <span>Patient: ${patient?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
     </div>
 
-    ${hasGraphs ? `
-        ${graphSection('Pressure vs Time (cmH\u2082O)', ahiImg)}
-        ${graphSection('Flow vs Time \u2014 Daily Usage (L/min)', usageImg)}
-        ${graphSection('Apnea &amp; Leak Overview \u2014 Last 7 Days', leakImg)}
-    ` : '<div style="text-align:center;padding:60px;color:#90A4AE;font-size:13px;">No graphs available.</div>'}
+    <div style="margin-top:10px;">
+        ${graphSection('Pressure avg Trend (cmH2O)', pressureImg)}
+        ${graphSection('Avg Flow Rate (L/min)', flowImg)}
+    </div>
+</div>
+
+<!-- ══════════════ PAGE 3 — Apnea, Leak & Mask Events ══════════════ -->
+<div class="page3">
+    <div class="p2hdr">
+        <h2>&#x1F4C8; Respiratory Trends (Part 2)</h2>
+        <span>Patient: ${patient?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
+    </div>
+
+    <div style="margin-top:10px;">
+        ${graphSection('Apnea Index (AHI)', ahiImg)}
+        ${graphSection('Leak Rate (L/min)', leakImg)}
+        ${graphSection('Mask Off Events Count', maskImg)}
+    </div>
 
     <!-- Doctor Signature -->
     <div class="sig-area">
@@ -410,20 +423,28 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                 base64: false,
             });
 
-            console.log('PDF Result:', JSON.stringify(results));
-
             if (!results || !results.filePath) {
-                Alert.alert('Error', 'PDF file could not be created.');
-                setGenerating(false);
-                return;
+                throw new Error('PDF file could not be created internally.');
             }
 
-            // Copy to Downloads folder for easy access
+            // Path Sanitization for Android
+            let sourcePath = results.filePath;
+            if (Platform.OS === 'android' && !sourcePath.startsWith('file://')) {
+                sourcePath = 'file://' + sourcePath;
+            }
+
             const fileName = `Airsine_Report_${Date.now()}.pdf`;
             const downloadPath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
 
             try {
+                // Check if Downloads directory is accessible
+                const exists = await RNFS.exists(RNFS.DownloadDirectoryPath);
+                if (!exists) {
+                    await RNFS.mkdir(RNFS.DownloadDirectoryPath);
+                }
+
                 await RNFS.copyFile(results.filePath, downloadPath);
+
                 Alert.alert(
                     '✅ Report Downloaded!',
                     `PDF saved to Downloads folder:\n${fileName}`,
@@ -431,19 +452,43 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                         { text: 'OK' },
                         {
                             text: 'Open PDF',
-                            onPress: () => {
-                                Linking.openURL('file://' + downloadPath).catch(() => {
-                                    Linking.openURL('content://' + downloadPath).catch(() => { });
-                                });
+                            onPress: async () => {
+                                try {
+                                    await Share.open({
+                                        url: 'file://' + downloadPath,
+                                        type: 'application/pdf',
+                                        title: 'Airsine Report',
+                                    });
+                                } catch (err) {
+                                    console.log('Share Error:', err);
+                                    // User might have cancelled or no app to open
+                                }
                             }
                         }
                     ]
                 );
             } catch (copyErr) {
+                console.log('Copy to Downloads failed, opening internal path:', copyErr);
                 Alert.alert(
                     '✅ Report Generated!',
-                    `PDF saved at:\n${results.filePath}`,
-                    [{ text: 'OK' }]
+                    `Saved to app storage. Click open to view.`,
+                    [
+                        { text: 'OK' },
+                        {
+                            text: 'Open PDF',
+                            onPress: async () => {
+                                try {
+                                    await Share.open({
+                                        url: sourcePath,
+                                        type: 'application/pdf',
+                                        title: 'Airsine Report',
+                                    });
+                                } catch (err) {
+                                    console.log('Share Error:', err);
+                                }
+                            }
+                        }
+                    ]
                 );
             }
 
@@ -451,12 +496,13 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 
         } catch (error) {
             setGenerating(false);
-            Alert.alert('Error', 'PDF generation failed');
-            console.log('Error generating PDF:', error);
+            Alert.alert('Download Failed', 'Could not generate or save the report. Please check storage permissions.');
+            console.error('Error generating PDF:', error);
         }
     };
 
     const reversedLogs = useMemo(() => [...logs].slice(0, 7).reverse(), [logs]);
+    const isBezier = reversedLogs.length > 1;
     const dates = useMemo(() => reversedLogs.map(l => l.date ? l.date.split('-')[2] : ''), [reversedLogs]);
     const summary = useMemo(() => calculateSummary(), [logs]);
 
@@ -469,76 +515,94 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
         labelColor: (opacity = 1) => `rgba(96, 125, 139, ${opacity})`,
         style: { borderRadius: 16 },
         propsForDots: { r: "5", strokeWidth: "3", stroke: "#FFF" },
-        barPercentage: 0.5,
         propsForLabels: { fontSize: 10 },
+        fillShadowGradientFrom: "#3088E5",
+        fillShadowGradientTo: "#FFFFFF",
+        fillShadowGradientOpacity: 0.1,
     }), []);
 
     const flowChartConfig = useMemo(() => ({
         ...chartConfig,
-        color: (opacity = 1) => `rgba(0, 188, 212, ${opacity})`,
+        color: (opacity = 1) => `rgba(13, 148, 136, ${opacity})`,
+        fillShadowGradientFrom: "#0D9488",
     }), [chartConfig]);
 
     const multiLineChartConfig = useMemo(() => ({
         ...chartConfig,
-        color: (opacity = 1) => `rgba(158, 158, 158, ${opacity})`,
+        color: (opacity = 1) => `rgba(71, 85, 105, ${opacity})`,
+        fillShadowGradientOpacity: 0, // No fill for multi-line
     }), [chartConfig]);
 
     return (
         <SafeAreaView style={styles.container}>
             {/* Hidden off-screen: 3 separate ViewShots for each chart */}
             <View style={styles.hiddenChartContainer} collapsable={false}>
-                {/* 1. Pressure vs Time */}
-                <ViewShot ref={ahiChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
+                {/* 1. Pressure Avg */}
+                <ViewShot ref={pressureChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
                     <View style={styles.hiddenChartView}>
                         {dates.length > 0 && <LineChart
-                            data={{
-                                labels: dates,
-                                datasets: [{
-                                    data: reversedLogs.map(l => l.pressure_95th || 0),
-                                    strokeDashArray: [5, 5]
-                                }]
-                            }}
-                            width={width - 30}
-                            height={200}
-                            chartConfig={{ ...chartConfig, propsForBackgroundLines: { strokeDasharray: "5,5" } }}
-                            bezier
+                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.pressure_avg || 0) }] }}
+                            width={360} height={200}
+                            chartConfig={chartConfig}
+                            formatYLabel={(v) => Number(v).toFixed(2)}
+                            bezier={isBezier}
                             withInnerLines={true}
                         />}
                     </View>
                 </ViewShot>
 
-                {/* 2. Flow vs Time */}
-                <ViewShot ref={usageChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
+                {/* 2. Flow Rate */}
+                <ViewShot ref={flowChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
                     <View style={styles.hiddenChartView}>
                         {dates.length > 0 && <LineChart
-                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.usage_hours || 0) }] }}
-                            width={width - 30}
-                            height={180}
-                            chartConfig={flowChartConfig}
-                            bezier
-                            withInnerLines={false}
+                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.avg_flow || 0) }] }}
+                            width={360} height={180}
+                            chartConfig={{ ...flowChartConfig, strokeWidth: 1 }}
+                            formatYLabel={(v) => Number(v).toFixed(2)}
+                            bezier={isBezier}
+                            withInnerLines={true}
                         />}
                     </View>
                 </ViewShot>
 
-                {/* 3. Last 7 Days (Mask Off, Apnea, High Leak) */}
-                <ViewShot ref={leakChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
+                {/* 3. AHI Mini */}
+                <ViewShot ref={ahiMiniChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
                     <View style={styles.hiddenChartView}>
                         {dates.length > 0 && <LineChart
-                            data={{
-                                labels: dates,
-                                legend: ['Apnea (AHI)', 'High Leak', 'Mask Off'],
-                                datasets: [
-                                    { data: reversedLogs.map(l => l.ahi || 0), color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` },
-                                    { data: reversedLogs.map(l => l.leak_rate || 0), color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` },
-                                    { data: reversedLogs.map(l => l.cai || 0), color: (opacity = 1) => `rgba(66, 165, 245, ${opacity})` }
-                                ]
-                            }}
-                            width={width - 30}
-                            height={200}
-                            chartConfig={multiLineChartConfig}
-                            bezier
+                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.ahi || 0) }] }}
+                            width={360} height={170}
+                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` }}
+                            bezier={isBezier}
                             withInnerLines={true}
+                            withDots={true}
+                        />}
+                    </View>
+                </ViewShot>
+
+                {/* 4. Leak Mini */}
+                <ViewShot ref={leakMiniChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
+                    <View style={styles.hiddenChartView}>
+                        {dates.length > 0 && <LineChart
+                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.leak_rate || 0) }] }}
+                            width={360} height={170}
+                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` }}
+                            bezier={isBezier}
+                            withInnerLines={true}
+                            withDots={true}
+                        />}
+                    </View>
+                </ViewShot>
+
+                {/* 5. Mask Mini */}
+                <ViewShot ref={maskMiniChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
+                    <View style={styles.hiddenChartView}>
+                        {dates.length > 0 && <LineChart
+                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.mask_off_count || 0) }] }}
+                            width={360} height={170}
+                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(66, 165, 245, ${opacity})` }}
+                            bezier={isBezier}
+                            withInnerLines={true}
+                            withDots={true}
                         />}
                     </View>
                 </ViewShot>
@@ -571,17 +635,6 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.shareRow}>
-                    <TouchableOpacity style={styles.shareOption}>
-                        <Icon name="share-variant" size={24} color={Colors.primary} />
-                        <Text style={styles.shareLabel}>Share PDF</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.shareOption}>
-                        <Icon name="email-outline" size={24} color={Colors.primary} />
-                        <Text style={styles.shareLabel}>Email Doctor</Text>
-                    </TouchableOpacity>
-                </View>
-
                 {/* Patient Summary Mini-Card */}
                 <View style={styles.summaryBox}>
                     <View style={styles.summaryItem}>
@@ -593,6 +646,9 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                         <Text style={styles.summaryLbl}>Compliance</Text>
                     </View>
                 </View>
+
+                {/* Modern Dashboard Graphs */}
+
             </ScrollView>
         </SafeAreaView>
     );
@@ -610,9 +666,10 @@ const styles = StyleSheet.create({
         opacity: 0,
     },
     hiddenChartView: {
-        width: width,
+        width: 400,
         backgroundColor: '#FFF',
-        padding: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 10,
     },
     header: {
         flexDirection: 'row',
@@ -722,6 +779,51 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: Colors.textSecondary,
         marginTop: 4,
+    },
+    dashboardSection: {
+        marginTop: 20,
+    },
+    sectionHeading: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#64748B',
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        marginBottom: 15,
+        paddingLeft: 4,
+    },
+    graphCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 15,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+        overflow: 'hidden',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+        gap: 8,
+    },
+    cardTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1E293B',
+    },
+    legendOverlay: {
+        paddingTop: 10,
+        alignItems: 'center',
+    },
+    legendNote: {
+        fontSize: 9,
+        color: '#94A3B8',
+        fontStyle: 'italic',
     },
 });
 

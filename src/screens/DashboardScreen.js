@@ -54,9 +54,8 @@ const DashboardScreen = ({ navigation }) => {
         const compliance = (logs.filter(l => l.usage_hours >= 4).length / logs.length * 100).toFixed(0);
         const avgPressure = (logs.reduce((acc, curr) => acc + curr.pressure_avg, 0) / logs.length).toFixed(1);
         const avgLeak = (logs.reduce((acc, curr) => acc + curr.leak_rate, 0) / logs.length).toFixed(1);
-        const p95 = (logs.reduce((acc, curr) => acc + (curr.pressure_95th || 0), 0) / logs.length).toFixed(1);
 
-        return { avgUsage, avgAHI, compliance, avgPressure, avgLeak, p95 };
+        return { avgUsage, avgAHI, compliance, avgPressure, avgLeak };
     };
 
     const metrics = getSummaryMetrics();
@@ -153,14 +152,7 @@ const DashboardScreen = ({ navigation }) => {
                                 color={parseFloat(metrics.avgAHI) > 5 ? Colors.error : Colors.primary}
                                 subtitle="Index"
                             />
-                            <SummaryCard
-                                title="95th Pressure"
-                                value={metrics.p95}
-                                unit="cm"
-                                icon="gauge"
-                                color="#7E57C2"
-                                subtitle="P95 Peak"
-                            />
+
                             <SummaryCard
                                 title="Avg Pressure"
                                 value={metrics.avgPressure}

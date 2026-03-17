@@ -39,7 +39,6 @@ export const setupDatabase = () => {
         pressure_min REAL DEFAULT 0,
         pressure_max REAL DEFAULT 0,
         pressure_avg REAL DEFAULT 0,
-        pressure_95th REAL DEFAULT 0,
         avg_flow REAL DEFAULT 0,
         leak_rate REAL DEFAULT 0,
         large_leak_percent REAL DEFAULT 0,
@@ -52,6 +51,7 @@ export const setupDatabase = () => {
         central_count INTEGER DEFAULT 0,
         hypopnea_count INTEGER DEFAULT 0,
         mask_fault_count INTEGER DEFAULT 0,
+        mask_off_count INTEGER DEFAULT 0,
         compliance_percent REAL DEFAULT 0,
         machine_type TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -133,7 +133,6 @@ export const recreateLogsTableWithData = (logsArray) => {
           pressure_min REAL DEFAULT 0,
           pressure_max REAL DEFAULT 0,
           pressure_avg REAL DEFAULT 0,
-          pressure_95th REAL DEFAULT 0,
           avg_flow REAL DEFAULT 0,
           leak_rate REAL DEFAULT 0,
           large_leak_percent REAL DEFAULT 0,
@@ -146,6 +145,7 @@ export const recreateLogsTableWithData = (logsArray) => {
           central_count INTEGER DEFAULT 0,
           hypopnea_count INTEGER DEFAULT 0,
           mask_fault_count INTEGER DEFAULT 0,
+          mask_off_count INTEGER DEFAULT 0,
           compliance_percent REAL DEFAULT 0,
           machine_type TEXT,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -159,10 +159,10 @@ export const recreateLogsTableWithData = (logsArray) => {
         tx.executeSql(
           `INSERT INTO logs
           (patient_id, date, usage_hours, therapy_type, avg_set_pressure,
-           pressure_min, pressure_max, pressure_avg, pressure_95th,
+           pressure_min, pressure_max, pressure_avg,
            avg_flow, leak_rate, large_leak_percent, avg_resp_rate,
            ahi, cai, oai, apnea_count, obstructive_count, central_count,
-           hypopnea_count, mask_fault_count, compliance_percent, machine_type)
+           hypopnea_count, mask_fault_count, mask_off_count, compliance_percent, machine_type)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             logData.patient_id ?? 1,
@@ -173,7 +173,6 @@ export const recreateLogsTableWithData = (logsArray) => {
             logData.pressure_min ?? 0,
             logData.pressure_max ?? 0,
             logData.pressure_avg ?? 0,
-            logData.pressure_95th ?? (logData.pressure_max ?? 0) * 0.95,
             logData.avg_flow ?? 0,
             logData.leak_rate ?? 0,
             logData.large_leak_percent ?? 0,
@@ -186,6 +185,7 @@ export const recreateLogsTableWithData = (logsArray) => {
             logData.central_count ?? 0,
             logData.hypopnea_count ?? 0,
             logData.mask_fault_count ?? 0,
+            logData.mask_off_count ?? 0,
             logData.compliance_percent ?? 0,
             logData.machine_type ?? 'CPAP',
           ]
@@ -227,7 +227,6 @@ export const getLogs = () => {
               pressure_min: 4.0,
               pressure_max: 4.0,
               pressure_avg: 4.0,
-              pressure_95th: 4.0,
               machine_type: 'Click (+) to Import'
             }];
             resolve(dummyLogs);

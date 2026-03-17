@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -76,8 +76,19 @@ const GraphScreen = ({ navigation }) => {
     }
 
     const reversedLogs = [...logs].slice(0, 7).reverse();
-    console.log('Reversed Logs:', reversedLogs);
-    const dates = reversedLogs.map(l => l.date.split('-')[2]);
+    const dates = reversedLogs.map(l => {
+        if (!l.date) return '';
+        const parts = l.date.split('-');
+        if (parts.length >= 3) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthIdx = parseInt(parts[1], 10) - 1;
+            const month = (monthIdx >= 0 && monthIdx < 12) ? months[monthIdx] : parts[1];
+            return `${parts[2]}`;
+        }
+        return l.date;
+    });
+
+    const isBezier = reversedLogs.length > 1;
 
     return (
         <SafeAreaView style={styles.safeContainer}>
@@ -104,20 +115,23 @@ const GraphScreen = ({ navigation }) => {
                             data={{
                                 labels: dates,
                                 datasets: [{
-                                    data: reversedLogs.map(l => l.pressure_95th || 0),
+                                    data: reversedLogs.map(l => l.pressure_avg || 0),
                                 }]
                             }}
                             width={width - Spacing.m * 4}
                             height={200}
                             chartConfig={chartConfig}
-                            bezier
+                            formatYLabel={(value) => Number(value).toFixed(2)}
+                            bezier={isBezier}
                             style={styles.chart}
                             withInnerLines={true}
                             onDataPointClick={(data) => handleDataPointClick(data, 0)}
                         />
                         {tooltipPos.visible && tooltipPos.chartIndex === 0 && (
                             <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
-                                <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                                <Text style={styles.tooltipText}>
+                                    {Number(tooltipPos.value).toFixed(2)}
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -129,23 +143,36 @@ const GraphScreen = ({ navigation }) => {
                         <Icon name="water-outline" size={18} color={Colors.secondary} />
                         <Text style={styles.chartLabel}>Flow vs Time</Text>
                     </View>
+
                     <View style={{ position: 'relative' }}>
                         <LineChart
                             data={{
                                 labels: dates,
-                                datasets: [{ data: reversedLogs.map(l => l.usage_hours || 0) }]
+                                datasets: [{ data: reversedLogs.map(l => l.avg_flow || 0) }]
                             }}
                             width={width - Spacing.m * 4}
                             height={180}
-                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(0, 188, 212, ${opacity})` }}
+
+                            chartConfig={{
+                                ...chartConfig,
+                                color: (opacity = 1) => `rgba(0, 188, 212, ${opacity})`,
+                                strokeWidth: 1   // 👈 stroke thickness
+                            }}
+
+                            formatYLabel={(value) => Number(value).toFixed(2)}   // 👈 Y-axis 2 decimal
+
                             style={styles.chart}
-                            bezier
-                            withInnerLines={false}
+                            bezier={isBezier}
+                            withInnerLines={true}
+
                             onDataPointClick={(data) => handleDataPointClick(data, 1)}
                         />
+
                         {tooltipPos.visible && tooltipPos.chartIndex === 1 && (
                             <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
-                                <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                                <Text style={styles.tooltipText}>
+                                    {Number(tooltipPos.value).toFixed(2)}   {/* tooltip bhi 2 decimal */}
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -157,44 +184,85 @@ const GraphScreen = ({ navigation }) => {
                         <Icon name="alert-circle-outline" size={18} color="#FFA726" />
                         <Text style={styles.chartLabel}>Last 7 Days (Apnea, Leak, Mask)</Text>
                     </View>
-                    {/* Custom Legend with spacing */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 8, gap: 20 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(239, 83, 80, 1)', marginRight: 5 }} />
-                            <Text style={{ fontSize: 11, color: '#555' }}>Apnea(AHI)</Text>
+                    {/* 1. Apnea Index Wave */}
+                    <View style={styles.miniGraphSection}>
+                        <View style={styles.miniGraphHeader}>
+                            <View style={[styles.miniLegendDot, { backgroundColor: '#EF5350' }]} />
+                            <Text style={styles.miniGraphTitle}>Apnea (AHI)</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(255, 167, 38, 1)', marginRight: 5 }} />
-                            <Text style={{ fontSize: 11, color: '#555' }}>High Leak</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(66, 165, 245, 1)', marginRight: 5 }} />
-                            <Text style={{ fontSize: 11, color: '#555' }}>Mask Off</Text>
+                        <View style={{ position: 'relative' }}>
+                            <LineChart
+                                data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.ahi || 0) }] }}
+                                // width={width - 40}
+                                width={width - Spacing.m * 4}
+                                height={170}
+                                chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` }}
+                                bezier={isBezier}
+                                withDots={true}
+                                withInnerLines={true}
+                                onDataPointClick={(data) => handleDataPointClick(data, 2)}
+                                style={styles.miniChartStyle}
+                            />
+                            {tooltipPos.visible && tooltipPos.chartIndex === 2 && (
+                                <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
+                                    <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
-                    <View style={{ position: 'relative' }}>
-                        <LineChart
-                            data={{
-                                labels: dates,
-                                datasets: [
-                                    { data: reversedLogs.map(l => l.ahi || 0), color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` },
-                                    { data: reversedLogs.map(l => l.leak_rate || 0), color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` },
-                                    { data: reversedLogs.map(l => l.cai || 0), color: (opacity = 1) => `rgba(66, 165, 245, ${opacity})` }
-                                ]
-                            }}
-                            width={width - Spacing.m * 4}
-                            height={220}
-                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(158, 158, 158, ${opacity})` }}
-                            style={styles.chart}
-                            bezier
-                            withInnerLines={true}
-                            onDataPointClick={(data) => handleDataPointClick(data, 2)}
-                        />
-                        {tooltipPos.visible && tooltipPos.chartIndex === 2 && (
-                            <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
-                                <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
-                            </View>
-                        )}
+
+                    {/* 2. Leak Rate Wave */}
+                    <View style={styles.miniGraphSection}>
+                        <View style={styles.miniGraphHeader}>
+                            <View style={[styles.miniLegendDot, { backgroundColor: '#FFA726' }]} />
+                            <Text style={styles.miniGraphTitle}>Leak Rate (L/min)</Text>
+                        </View>
+                        <View style={{ position: 'relative' }}>
+                            <LineChart
+                                data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.leak_rate || 0) }] }}
+                                // width={width - 40}
+                                width={width - Spacing.m * 4}
+                                height={170}
+                                chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` }}
+                                bezier={isBezier}
+                                withDots={true}
+                                withInnerLines={true}
+                                onDataPointClick={(data) => handleDataPointClick(data, 3)}
+                                style={styles.miniChartStyle}
+                            />
+                            {tooltipPos.visible && tooltipPos.chartIndex === 3 && (
+                                <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
+                                    <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* 3. Mask Off Wave */}
+                    <View style={styles.miniGraphSection}>
+                        <View style={styles.miniGraphHeader}>
+                            <View style={[styles.miniLegendDot, { backgroundColor: '#42A5F5' }]} />
+                            <Text style={styles.miniGraphTitle}>Mask Off Count</Text>
+                        </View>
+                        <View style={{ position: 'relative' }}>
+                            <LineChart
+                                data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.mask_off_count || 0) }] }}
+                                // width={width - 40}
+                                width={width - Spacing.m * 4}
+                                height={170}
+                                chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(66, 165, 245, ${opacity})` }}
+                                bezier={isBezier}
+                                withDots={true}
+                                withInnerLines={true}
+                                onDataPointClick={(data) => handleDataPointClick(data, 4)}
+                                style={styles.miniChartStyle}
+                            />
+                            {tooltipPos.visible && tooltipPos.chartIndex === 4 && (
+                                <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
+                                    <Text style={styles.tooltipText}>{tooltipPos.value}</Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
                 </View>
 
@@ -311,6 +379,34 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 12,
         fontWeight: '900',
+    },
+    miniGraphSection: {
+        marginBottom: 15,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F4F8',
+    },
+    miniGraphHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 5,
+        marginLeft: 10,
+    },
+    miniLegendDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 6,
+    },
+    miniGraphTitle: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#607D8B',
+    },
+    miniChartStyle: {
+        marginVertical: 0,
+        borderRadius: 0,
+        marginLeft: -15,
     },
 });
 

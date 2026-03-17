@@ -14,6 +14,7 @@ import {
     KeyboardAvoidingView,
     Animated,
     Alert,
+    Keyboard,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -160,6 +161,8 @@ const ProfileScreen = ({ navigation, route }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [patient, setPatient] = useState({});
+    const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+    const scrollRef = useRef(null);
 
     // Picker states
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -187,7 +190,31 @@ const ProfileScreen = ({ navigation, route }) => {
         ]).start();
     };
 
-    useEffect(() => { loadPatientData(); }, []);
+    useEffect(() => {
+        loadPatientData();
+
+        const keyboardDidShowListener = Keyboard.addListener(
+            Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
+            () => {
+                setKeyboardVisible(true);
+                // Force a small delay to ensure layout has updated before scrolling
+                setTimeout(() => {
+                    if (isEditing) {
+                        scrollRef.current?.scrollToEnd({ animated: true });
+                    }
+                }, 100);
+            }
+        );
+        const keyboardDidHideListener = Keyboard.addListener(
+            Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
+            () => setKeyboardVisible(false)
+        );
+
+        return () => {
+            keyboardDidHideListener.remove();
+            keyboardDidShowListener.remove();
+        };
+    }, [isEditing]);
 
     const loadPatientData = async () => {
         setLoading(true);
@@ -298,7 +325,7 @@ const ProfileScreen = ({ navigation, route }) => {
     if (loading) {
         return (
             <View style={styles.loadingCont}>
-                <ActivityIndicator size="large" color={PRIMARY_LIGHT} />
+                <ActivityIndicator size="large" color={Colors.primary} />
                 <Text style={styles.loadingText}>Loading profile…</Text>
             </View>
         );
@@ -306,7 +333,7 @@ const ProfileScreen = ({ navigation, route }) => {
 
     return (
         <SafeAreaView style={styles.safe}>
-            <StatusBar backgroundColor={PRIMARY} barStyle="light-content" />
+            <StatusBar backgroundColor={Colors.primary} barStyle="light-content" />
 
             {/* ── Top Header ── */}
             <View style={styles.topBar}>
@@ -334,10 +361,15 @@ const ProfileScreen = ({ navigation, route }) => {
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
                 <ScrollView
-                    contentContainerStyle={styles.scroll}
+                    ref={scrollRef}
+                    contentContainerStyle={[
+                        styles.scroll,
+                        isKeyboardVisible && { paddingBottom: 20 } // Large padding to ensure everything can be scrolled up
+                    ]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
@@ -352,9 +384,9 @@ const ProfileScreen = ({ navigation, route }) => {
                             {patient?.name || (isSetup ? 'New Patient' : 'Your Name')}
                         </Text>
                         <View style={styles.idBadge}>
-                            <Icon name="identifier" size={13} color={PRIMARY_LIGHT} />
+                            {/* <Icon name="identifier" size={13} color={PRIMARY_LIGHT} /> */}
                             <Text style={styles.idBadgeText}>
-                                ID: {patient?.patient_custom_id || patient?.id || 'Not Assigned'}
+                                ID: P-{patient?.patient_custom_id || patient?.id || 'Not Assigned'}
                             </Text>
                         </View>
                         {patient?.gender ? (
@@ -369,14 +401,14 @@ const ProfileScreen = ({ navigation, route }) => {
                         <FieldRow
                             label="Patient ID"
                             icon="identifier"
-                            placeholder="e.g. P-00001"
+                            placeholder="e.g. 01"
                             keyboardType="default"
                             {...fp('patient_custom_id')}
                         />
                         <FieldRow
                             label="Full Name"
                             icon="account-details-outline"
-                            placeholder="e.g. Shiv Dhakad"
+                            placeholder="e.g. user name"
                             {...fp('name')}
                         />
                         <FieldRow
@@ -555,7 +587,7 @@ const styles = StyleSheet.create({
 
     // Header
     topBar: {
-        backgroundColor: PRIMARY,
+        backgroundColor: Colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
@@ -584,7 +616,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         padding: 24,
-        marginBottom: 18,
+        marginBottom: 8,
         borderWidth: 1,
         borderColor: BORDER,
         shadowColor: PRIMARY,
