@@ -8,3 +8,10 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+
+
+# PDF / JPX fix
+-keep class com.tom_roush.** { *; }
+-keep class org.apache.pdfbox.** { *; }
+-dontwarn com.gemalto.jp2.**

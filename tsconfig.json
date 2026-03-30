@@ -7,7 +7,8 @@
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "App.js"
   ],
   "exclude": [
     "**/node_modules",

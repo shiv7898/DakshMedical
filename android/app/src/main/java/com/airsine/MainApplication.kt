@@ -1,4 +1,4 @@
-package com.dakshmedical
+package com.airsine
 
 import android.app.Application
 import com.facebook.react.PackageList
