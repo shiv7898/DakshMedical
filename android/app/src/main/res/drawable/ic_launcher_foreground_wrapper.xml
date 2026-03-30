@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Center the logo and shrink it to stay in the 'safe zone' -->
+    <item
+        android:drawable="@mipmap/ic_launcher_foreground"
+        android:gravity="center"
+        android:top="21dp"
+        android:bottom="21dp"
+        android:left="21dp"
+        android:right="21dp" />
+</layer-list>

@@ -1,40 +1,6 @@
-/**
- * csvParser.js
- *
- * Supports NEW headerless device log format:
- *   Col 0 : timestamp          (YYYYMMDDHHmmss)
- *   Col 1 : therapy_status     (1=ON, 0=OFF)
- *   Col 2 : therapy_select     (1=CPAP, 2=Auto-CPAP)
- *   Col 3 : avg_set_pressure   (cmH₂O)
- *   Col 4 : measure_pressure   (cmH₂O)
- *   Col 5 : flow               (L/min)
- *   Col 6 : leak               (L/min)
- *   Col 7 : resp_rate          (breaths/min)
- *   Col 8 : apnea_detect       (1=yes, 0=no)
- *   Col 9 : type_of_apnea      (1=Obstructive, 2=Central, 3=Hypopnea)
- *   Col 10: open_mask_fault    (1=open/fault, 0=closed/OK)
- *
- * Also still supports old header-based CSVs for backward compatibility.
- */
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-/**
- * Parse "YYYYMMDDHHmmss" → Date object (local time)
- */
-const parseTimestamp = (ts) => {
-    if (!ts) return null;
-    const s = String(ts).trim();
-    if (s.length !== 14) return null;
-    const year = parseInt(s.slice(0, 4), 10);
-    const month = parseInt(s.slice(4, 6), 10) - 1; // 0-indexed
-    const day = parseInt(s.slice(6, 8), 10);
-    const hour = parseInt(s.slice(8, 10), 10);
-    const min = parseInt(s.slice(10, 12), 10);
-    const sec = parseInt(s.slice(12, 14), 10);
-    const d = new Date(year, month, day, hour, min, sec);
-    return isNaN(d.getTime()) ? null : d;
-};
 
 /**
  * Get YYYY-MM-DD string from Date
@@ -57,56 +23,109 @@ const percentile = (sorted, pct) => {
 
 // ─── new-format detector ─────────────────────────────────────────────────────
 
-/**
- * Returns true if the file looks like our NEW headerless device log.
- * Heuristic: first non-empty line starts with a 14-digit timestamp and
- * has at least 10 comma-separated columns.
- */
-const isNewDeviceFormat = (rawText) => {
+const parseTimestampColon = (ts) => {
+    if (!ts) return null;
+    const parts = String(ts).trim().split(':');
+    if (parts.length !== 2) return null;
+    const dStr = parts[0];
+    const tStr = parts[1];
+    if (dStr.length !== 8 || tStr.length !== 6) return null;
+    const year = parseInt(dStr.slice(0, 4), 10);
+    const month = parseInt(dStr.slice(4, 6), 10) - 1;
+    const day = parseInt(dStr.slice(6, 8), 10);
+    const hour = parseInt(tStr.slice(0, 2), 10);
+    const min = parseInt(tStr.slice(2, 4), 10);
+    const sec = parseInt(tStr.slice(4, 6), 10);
+    const d = new Date(year, month, day, hour, min, sec);
+    return isNaN(d.getTime()) ? null : d;
+};
+
+const isUltraNewDeviceFormat = (rawText) => {
     const lines = rawText.split(/\r?\n/).filter(l => l.trim().length > 0);
     if (lines.length === 0) return false;
     const firstLine = lines[0].trim();
     const cols = firstLine.split(',');
-    if (cols.length < 11) return false;
+    if (cols.length < 6) return false;
     const ts = cols[0].trim();
-    return /^\d{14}$/.test(ts);
+    return /^\d{8}:\d{6}$/.test(ts);
 };
 
-// ─── new-format parser ────────────────────────────────────────────────────────
 
-const parseNewDeviceFormat = (rawText) => {
+// ─── ultra-new-format parser ────────────────────────────────────────────────────
+
+const parseUltraNewDeviceFormat = (rawText) => {
     const lines = rawText.split(/\r?\n/).filter(l => l.trim().length > 0);
 
-    // Parse every line into a typed row object
     const rows = [];
     for (const line of lines) {
         const cols = line.split(',');
-        if (cols.length < 11) continue;
+        if (cols.length < 6) continue;
 
-        const ts = parseTimestamp(cols[0].trim());
-        if (!ts) continue;
+        const startTs = parseTimestampColon(cols[0].trim());
+        const endTs = parseTimestampColon(cols[1].trim());
+        if (!startTs || !endTs) continue;
+
+        const therapyDetails = cols[3].trim().split(':');
+        const avgData = cols[4].trim().split(':');
+        const eventCounts = cols[5].trim().split(':');
+
+        let mode = parseInt(therapyDetails[0], 10); // 1 = CPAP, 2 = APAP
+        let cpapPressure = 0, minPressure = 0, maxPressure = 0;
+        let rampStartPressure = 0, pressureOff = 0, rampDuration = 0;
+
+        if (mode === 1 && therapyDetails.length >= 5) {
+            rampStartPressure = (parseFloat(therapyDetails[1]) || 0) / 10;
+            cpapPressure = (parseFloat(therapyDetails[2]) || 0) / 10;
+            pressureOff = parseInt(therapyDetails[3], 10) || 0;
+            rampDuration = parseInt(therapyDetails[4], 10) || 0;
+        } else if (mode === 2 && therapyDetails.length >= 6) {
+            rampStartPressure = (parseFloat(therapyDetails[1]) || 0) / 10;
+            minPressure = (parseFloat(therapyDetails[2]) || 0) / 10;
+            maxPressure = (parseFloat(therapyDetails[3]) || 0) / 10;
+            pressureOff = parseInt(therapyDetails[4], 10) || 0;
+            rampDuration = parseInt(therapyDetails[5], 10) || 0;
+        } else {
+            // Fallback
+            cpapPressure = (parseFloat(therapyDetails[2] || 0)) / 10;
+        }
+
+        const avgFlow = parseFloat(avgData[0]) || 0;
+        const avgLeak = parseFloat(avgData[1]) || 0;
+        const avgRespRate = parseFloat(avgData[2]) || 0;
+        const apneaCountRow = parseInt(avgData[3], 10) || 0;
+
+        const openMaskCountRow = parseInt(eventCounts[0], 10) || 0;
+        const lowPressureCountRow = parseInt(eventCounts[1], 10) || 0;
+
+        let durationSec = (endTs.getTime() - startTs.getTime()) / 1000;
+        if (durationSec < 0) durationSec = 0;
+        // Edge case: if start and end are exactly the same, maybe it's 1 sec event or 0 sec
+        if (durationSec === 0) durationSec = 1;
 
         rows.push({
-            ts,
-            therapy_status: parseInt(cols[1], 10) || 0,   // 1=ON, 0=OFF
-            therapy_select: parseInt(cols[2], 10) || 0,   // 1=CPAP, 2=AutoCPAP
-            avg_set_pressure: parseFloat(cols[3]) || 0,
-            measure_pressure: parseFloat(cols[4]) || 0,
-            flow: parseFloat(cols[5]) || 0,
-            leak: parseFloat(cols[6]) || 0,
-            resp_rate: parseFloat(cols[7]) || 0,
-            apnea_detect: parseInt(cols[8], 10) || 0,   // 1=yes
-            apnea_type: parseInt(cols[9], 10) || 0,   // 1=Obstr,2=Central,3=Hypopnea
-            mask_fault: parseInt(cols[10], 10) || 0,   // 1=open/fault
+            startTs,
+            durationSec,
+            mode,
+            cpapPressure,
+            minPressure,
+            maxPressure,
+            rampStartPressure,
+            pressureOff,
+            rampDuration,
+            avgFlow,
+            avgLeak,
+            avgRespRate,
+            apneaCountRow,
+            openMaskCountRow,
+            lowPressureCountRow
         });
     }
 
     if (rows.length === 0) return [];
 
-    // ── Group by calendar date ────────────────────────────────────────────────
     const byDate = {};
     for (const row of rows) {
-        const key = dateKey(row.ts);
+        const key = dateKey(row.startTs);
         if (!byDate[key]) byDate[key] = [];
         byDate[key].push(row);
     }
@@ -116,259 +135,138 @@ const parseNewDeviceFormat = (rawText) => {
     for (const date of Object.keys(byDate).sort()) {
         const dayRows = byDate[date];
 
-        // ── Separate active (therapy ON) rows ─────────────────────────────────
-        // A "session" is a contiguous block where therapy_status === 1.
-        // We calculate usage as the total span of ON-rows (last ON ts − first ON ts).
-        const onRows = dayRows.filter(r => r.therapy_status === 1);
-        if (onRows.length === 0) continue; // skip days with no active therapy
+        let totalDurationSec = 0;
+        let sumFlow = 0;
+        let sumLeak = 0;
+        let validLeakRowsCount = 0;
+        let sumRespRate = 0;
+        let totalApneaCount = 0;
+        let totalOpenMask = 0;
+        let totalLowPressure = 0;
+        let cpapCount = 0;
+        let apapCount = 0;
 
-        // Usage hours: span from first-ON to last-ON
-        const firstOn = onRows[0].ts;
-        const lastOn = onRows[onRows.length - 1].ts;
-        const durationSec = (lastOn.getTime() - firstOn.getTime()) / 1000;
-        const usageHours = parseFloat((durationSec / 3600).toFixed(2));
+        let maxP = 0;
+        let minP = 999;
+        let sumP = 0;
+        let validPRows = 0;
 
-        // ── Filter rows for Clinical Averages (Pressure, Flow, Leak, Resp) ────
-        // 1. Exclude if leak > 200
-        // 2. Exclude if mask_fault === 1 (Open Mask)
-        // 3. Include therapy_status === 0 (OFF)
-        // 4. Include 0 values for sum and divisor
-        const validAvgRows = dayRows.filter(r => r.leak <= 200 && r.mask_fault === 0);
+        let rampStartPressureDay = 0;
+        let pressureOffDay = 0;
+        let rampDurationDay = 0;
 
-        // ── Pressures ────────────────────────────────────────────────────────
-        const pressures = validAvgRows.map(r => r.measure_pressure).sort((a, b) => a - b);
-        const pressureMin = pressures.length > 0 ? pressures[0] : 0;
-        const pressureMax = pressures.length > 0 ? pressures[pressures.length - 1] : 0;
-        const pressureAvg = pressures.length > 0
-            ? parseFloat((pressures.reduce((s, v) => s + v, 0) / pressures.length).toFixed(2))
-            : 0;
-        console.log("pressureAvg", pressureAvg);
-        console.log("pressureMax", pressureMax);
-        console.log("pressureMin", pressureMin);
-        console.log("pressures", pressures);
+        for (const r of dayRows) {
+            totalDurationSec += r.durationSec;
+            sumFlow += r.avgFlow;
+            
+            // Filter leak > 200 for clinical accuracy
+            if (r.avgLeak < 200) {
+                sumLeak += r.avgLeak;
+                validLeakRowsCount++;
+            }
+            
+            sumRespRate += r.avgRespRate;
+            totalApneaCount += r.apneaCountRow;
+            totalOpenMask += r.openMaskCountRow;
+            totalLowPressure += r.lowPressureCountRow;
 
+            if (r.mode === 1) {
+                cpapCount++;
+                const p = r.cpapPressure;
+                if (p > 0) {
+                    if (p > maxP) maxP = p;
+                    if (p < minP) minP = p;
+                    sumP += p;
+                    validPRows++;
+                }
+            } else if (r.mode === 2) {
+                apapCount++;
+                const p = (r.minPressure + r.maxPressure) / 2;
+                if (r.maxPressure > maxP) maxP = r.maxPressure;
+                if (r.minPressure < minP) minP = r.minPressure;
+                sumP += p;
+                validPRows++;
+            }
 
+            if (r.rampStartPressure > 0) rampStartPressureDay = r.rampStartPressure;
+            if (r.rampDuration > 0) rampDurationDay = r.rampDuration;
+            if (r.pressureOff !== undefined) pressureOffDay = r.pressureOff;
+        }
 
-        // Avg set pressure
-        const setPressures = validAvgRows.map(r => r.avg_set_pressure);
-        const avgSetPressure = setPressures.length > 0
-            ? parseFloat((setPressures.reduce((s, v) => s + v, 0) / setPressures.length).toFixed(2))
-            : 0;
+        const usageHours = parseFloat((totalDurationSec / 3600).toFixed(2));
 
-        // ── Flow ──────────────────────────────────────────────────────────────
-        const flows = validAvgRows.map(r => r.flow);
-        const avgFlow = flows.length > 0
-            ? parseFloat((flows.reduce((s, v) => s + v, 0) / flows.length).toFixed(2))
-            : 0;
+        const rowCount = dayRows.length;
+        const avgFlowDay = rowCount > 0 ? parseFloat((sumFlow / rowCount).toFixed(2)) : 0;
+        const avgLeakDay = validLeakRowsCount > 0 ? parseFloat((sumLeak / validLeakRowsCount).toFixed(2)) : 0;
+        const avgRespRateDay = rowCount > 0 ? parseFloat((sumRespRate / rowCount).toFixed(2)) : 0;
+        const pressureAvg = validPRows > 0 ? parseFloat((sumP / validPRows).toFixed(2)) : 0;
+        const pressureMin = minP === 999 ? 0 : minP;
+        const pressureMax = maxP;
 
-        // ── Leak ──────────────────────────────────────────────────────────────
-        const leaks = validAvgRows.map(r => r.leak);
-        const leakAvg = leaks.length > 0
-            ? parseFloat((leaks.reduce((s, v) => s + v, 0) / leaks.length).toFixed(2))
-            : 0;
-        const largeLeakCount = leaks.filter(l => l > 24).length;
-        const largeLeakPercent = leaks.length > 0
-            ? parseFloat(((largeLeakCount / leaks.length) * 100).toFixed(1))
-            : 0;
+        const ahi = usageHours > 0 ? parseFloat((totalApneaCount / usageHours).toFixed(2)) : 0;
 
-        // ── Respiratory Rate ──────────────────────────────────────────────────
-        const respRates = validAvgRows.map(r => r.resp_rate);
-        const avgRespRate = respRates.length > 0
-            ? parseFloat((respRates.reduce((s, v) => s + v, 0) / respRates.length).toFixed(2))
-            : 0;
+        // Mixed = both CPAP and APAP sessions present on same day
+        let therapyType;
+        if (cpapCount > 0 && apapCount > 0) {
+            therapyType = 'Mixed';
+        } else if (apapCount > 0) {
+            therapyType = 'APAP';
+        } else {
+            therapyType = 'CPAP';
+        }
 
-        // ── Apnea events (Exclude if leak > 200) ──────────────────────────────
-        // Rules:
-        // 1. Exclude if leak > 200
-        // 2. Divide by total rows that passed the filter
-        const validAhiRows = dayRows.filter(r => r.leak <= 200);
-        const apneaRows = validAhiRows.filter(r => r.apnea_detect === 1);
-        const apneaCount = apneaRows.length;
-
-        // Count by type (within valid rows)
-        const obstructiveCount = apneaRows.filter(r => r.apnea_type === 1).length;
-        const centralCount = apneaRows.filter(r => r.apnea_type === 2).length;
-        const hypopneaCount = apneaRows.filter(r => r.apnea_type === 3).length;
-
-        // AHI = apneaCount / totalValidAhiRows
-        // Using 3 decimal places for row-based ratio accuracy
-        const totalAhiRows = validAhiRows.length;
-        const ahi = totalAhiRows > 0 ? parseFloat((apneaCount / usageHours).toFixed(2)) : 0;
-        const cai = totalAhiRows > 0 ? parseFloat((centralCount / usageHours).toFixed(3)) : 0;
-        const oai = totalAhiRows > 0 ? parseFloat((obstructiveCount / usageHours).toFixed(3)) : 0;
-
-        // ── Mask fault (open mask) ────────────────────────────────────────────
-        const maskFaultCount = onRows.filter(r => r.mask_fault === 1).length;
-        const maskOffCount = onRows.filter(r => r.mask_fault === 0).length;
-        console.log(`[${date}] Mask Fault Count (1): ${maskFaultCount}`);
-        console.log(`[${date}] Mask Off Count (0): ${maskOffCount}`);
-
-        // ── Therapy type (majority vote) ──────────────────────────────────────
-        const cpapCount = onRows.filter(r => r.therapy_select === 1).length;
-        const autoCpapCount = onRows.filter(r => r.therapy_select === 2).length;
-        const therapyType = autoCpapCount >= cpapCount ? 'Auto-CPAP' : 'CPAP';
-
-        // ── Compliance ────────────────────────────────────────────────────────
         const compliancePercent = usageHours >= 4 ? 100 : 0;
+        console.log(
+            "date", date,
+            "usage_hours", usageHours,
+            "therapy_type", therapyType,
+            "avg_set_pressure", pressureAvg,
+            "pressure_min", pressureMin,
+            "pressure_max", pressureMax,
+            "pressure_avg", pressureAvg,
+            "ramp_start_pressure", rampStartPressureDay,
+            "pressure_off", pressureOffDay,
+            "ramp_duration", rampDurationDay,
+            "avg_flow", avgFlowDay,
+            "leak_rate", avgLeakDay,
 
-        // Console summary
-        console.log(`🏥 CLINICAL SUMMARY [${date}]`);
-        console.table({
-            'Apnea rows': apneaRows,
-            'Apnea Count rows': apneaCount,
-            'Usage Hours': usageHours,
-            'Therapy Type': therapyType,
-            'Avg Set Pressure': avgSetPressure,
-            'Pressure Min': pressureMin,
-            'Pressure Max': pressureMax,
-            'Pressure Avg': pressureAvg,
+            "avg_resp_rate", avgRespRateDay,
+            "ahi", ahi,
 
-            'Avg Flow': avgFlow,
-            'Leak Avg': leakAvg,
-            'Large Leak %': largeLeakPercent,
-            'Avg Resp Rate': avgRespRate,
-            'AHI': ahi,
-            'Apnea Count': apneaCount,
-            'Obstructive': obstructiveCount,
-            'Central': centralCount,
-            'Hypopnea': hypopneaCount,
-            'Mask Fault Count': maskFaultCount,
-            'Compliance': `${compliancePercent}%`,
-        });
+            "apnea_count", totalApneaCount,
+            "totalOpenMask", totalOpenMask,
+
+            "compliance_percent", compliancePercent,
+        )
 
         summaries.push({
             date,
             usage_hours: usageHours,
             therapy_type: therapyType,
-            avg_set_pressure: avgSetPressure,
+            avg_set_pressure: pressureAvg,
             pressure_min: pressureMin,
             pressure_max: pressureMax,
             pressure_avg: pressureAvg,
+            ramp_start_pressure: rampStartPressureDay,
+            pressure_off: pressureOffDay,
+            ramp_duration: rampDurationDay,
 
-            avg_flow: avgFlow,
-            leak_rate: leakAvg,
-            large_leak_percent: largeLeakPercent,
-            avg_resp_rate: avgRespRate,
+            avg_flow: avgFlowDay,
+            leak_rate: avgLeakDay,
+            // large_leak_percent: 0,
+            avg_resp_rate: avgRespRateDay,
             ahi,
-            cai,
-            oai,
-            apnea_count: apneaCount,
-            obstructive_count: obstructiveCount,
-            central_count: centralCount,
-            hypopnea_count: hypopneaCount,
-            mask_fault_count: maskFaultCount,
-            mask_off_count: maskOffCount,
+            // cai: 0,
+            // oai: 0,
+            apnea_count: totalApneaCount,
+            mask_fault_count: totalOpenMask,
+            low_pressure_count: totalLowPressure,
             compliance_percent: compliancePercent,
         });
     }
 
     return summaries;
 };
-
-// ─── old-format (header-based) processor ─────────────────────────────────────
-
-const processRawLogs = (data) => {
-    const getVal = (obj, key) => {
-        if (!obj || typeof obj !== 'object') return undefined;
-        const keys = Object.keys(obj);
-        const foundKey = keys.find(k => k && k.toLowerCase() === key.toLowerCase());
-        return foundKey ? obj[foundKey] : undefined;
-    };
-
-    const activeData = data.filter(row => {
-        if (!row) return false;
-        const mode = getVal(row, 'Mode');
-        const modeUpper = mode ? String(mode).toUpperCase() : '';
-        const evDesc = getVal(row, 'Event_Desc');
-        const evDescUpper = evDesc ? String(evDesc).toUpperCase() : '';
-        return modeUpper !== 'OFF' && modeUpper !== 'SYSTEM_STANDBY' && evDescUpper !== 'SYSTEM_STANDBY' && mode !== undefined;
-    });
-
-    if (activeData.length === 0) { console.log('No active therapy rows found'); return []; }
-
-    const groupedData = {};
-    activeData.forEach(row => {
-        const timestamp = getVal(row, 'Timestamp_MS') || getVal(row, 'timestamp');
-        if (!timestamp) return;
-        const dateObj = new Date(Number(timestamp) * 1000);
-        if (isNaN(dateObj.getTime())) return;
-        const ds = dateObj.toISOString().split('T')[0];
-        if (!groupedData[ds]) groupedData[ds] = [];
-        groupedData[ds].push(row);
-    });
-
-    const summaries = [];
-
-    Object.keys(groupedData).forEach(ds => {
-        const dayData = groupedData[ds];
-        if (dayData.length === 0) return;
-
-        const firstRow = dayData[0];
-        const lastRow = dayData[dayData.length - 1];
-        const tsFirst = getVal(firstRow, 'Timestamp_MS') || getVal(firstRow, 'timestamp');
-        const tsLast = getVal(lastRow, 'Timestamp_MS') || getVal(lastRow, 'timestamp');
-        if (!tsFirst) return;
-
-        const durationSeconds = Number(tsLast) - Number(tsFirst);
-        const usageHours = parseFloat((durationSeconds / 3600).toFixed(2));
-
-        const eventCount = dayData.filter(row => {
-            const evDesc = getVal(row, 'Event_Desc');
-            if (!evDesc) return false;
-            const desc = String(evDesc).toUpperCase();
-            return ['HYPOPNEA_START', 'OBSTRUCTIVE_APNEA', 'CENTRAL_APNEA', 'MIXED_APNEA', 'APNEA_START', 'HYPOPNEA', 'APNEA'].includes(desc);
-        }).length;
-
-        const ahi = usageHours > 0 ? parseFloat((eventCount / usageHours).toFixed(2)) : 0;
-
-        const maskOffCount = dayData.filter(row => {
-            const evDesc = getVal(row, 'Event_Desc');
-            if (!evDesc) return false;
-            return ['MASK OFF', 'MASK_OFF'].includes(String(evDesc).toUpperCase());
-        }).length;
-
-        const pressures = dayData
-            .map(row => { const v = getVal(row, 'Measured_Press'); const n = typeof v === 'number' ? v : parseFloat(v); return isNaN(n) ? null : n; })
-            .filter(n => n !== null)
-            .sort((a, b) => a - b);
-
-        if (pressures.length === 0) {
-            summaries.push({ date: ds, usage_hours: usageHours, ahi, leak_rate: 0, pressure_min: 0, pressure_max: 0, pressure_avg: 0, pressure_95th: 0, cai: 0, large_leak_percent: 0, avg_resp_rate: 0, compliance_percent: 0 });
-            return;
-        }
-
-        const pressureAvg = parseFloat((pressures.reduce((s, a) => s + a, 0) / pressures.length).toFixed(1));
-        const pressureMax = pressures[pressures.length - 1];
-        const pressureMin = pressures[0];
-
-
-        const leaks = dayData.map(row => { const v = getVal(row, 'Leak_Lmin'); return typeof v === 'number' ? v : parseFloat(v) || 0; });
-        const leakAvg = leaks.length > 0 ? parseFloat((leaks.reduce((s, a) => s + a, 0) / leaks.length).toFixed(1)) : 0;
-        const largeLeakPercent = leaks.length > 0 ? parseFloat(((leaks.filter(l => l > 24).length / leaks.length) * 100).toFixed(1)) : 0;
-
-        const respRates = dayData.map(row => { const v = getVal(row, 'Resp_Rate'); return typeof v === 'number' ? v : parseFloat(v) || 0; });
-        const respRateAvg = respRates.length > 0 ? parseFloat((respRates.reduce((s, a) => s + a, 0) / respRates.length).toFixed(1)) : 0;
-
-        summaries.push({
-            date: ds,
-            usage_hours: usageHours,
-            ahi,
-            cai: maskOffCount,
-            leak_rate: leakAvg,
-            pressure_min: pressureMin,
-            pressure_max: pressureMax,
-            pressure_avg: pressureAvg,
-            pressure_95th: pressure95th,
-            large_leak_percent: largeLeakPercent,
-            avg_resp_rate: respRateAvg,
-            compliance_percent: usageHours >= 4 ? 100 : 0,
-        });
-    });
-
-    return summaries;
-};
-
-// ─── main export ─────────────────────────────────────────────────────────────
 
 export const parseCSV = (fileContent) => {
     return new Promise((resolve, reject) => {
@@ -378,10 +276,9 @@ export const parseCSV = (fileContent) => {
                 return;
             }
 
-            // ── Detect format ─────────────────────────────────────────────────
-            if (isNewDeviceFormat(fileContent)) {
-                console.log('✅ Detected NEW headerless device log format');
-                const summaries = parseNewDeviceFormat(fileContent);
+            if (isUltraNewDeviceFormat(fileContent)) {
+                console.log('✅ Detected device log format');
+                const summaries = parseUltraNewDeviceFormat(fileContent);
                 if (summaries && summaries.length > 0) {
                     resolve(summaries);
                 } else {
@@ -390,73 +287,7 @@ export const parseCSV = (fileContent) => {
                 return;
             }
 
-            // ── Fallback: old header-based CSV ────────────────────────────────
-            console.log('ℹ️  Falling back to header-based CSV parsing');
-            import('papaparse').then(({ default: Papa }) => {
-                Papa.parse(fileContent, {
-                    header: true,
-                    dynamicTyping: true,
-                    skipEmptyLines: 'greedy',
-                    transformHeader: (header) => header.trim(),
-                    complete: (results) => {
-                        try {
-                            const data = results.data;
-                            if (!data || data.length === 0) { resolve([]); return; }
-
-                            const firstRow = data[0];
-                            if (!firstRow) { resolve([]); return; }
-
-                            const keys = Object.keys(firstRow);
-                            const findKey = (search) => keys.find(k => k && k.toLowerCase().replace(/[\s_]/g, '') === search.toLowerCase().replace(/[\s_]/g, ''));
-
-                            const hasTimestamp = keys.some(key =>
-                                key && typeof key === 'string' && (key.toLowerCase() === 'timestamp_ms' || key.toLowerCase() === 'timestamp')
-                            );
-
-                            if (hasTimestamp) {
-                                const sessionSummaries = processRawLogs(data);
-                                if (sessionSummaries && sessionSummaries.length > 0) {
-                                    resolve(sessionSummaries);
-                                } else {
-                                    reject(new Error('Device logs found but no active therapy session detected.'));
-                                }
-                            } else {
-                                const mappedData = data.filter(row => {
-                                    const dk = findKey('date');
-                                    return row && dk && row[dk];
-                                }).map(row => {
-                                    const get = (k) => {
-                                        const found = Object.keys(row).find(rk => rk && rk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, ''));
-                                        return found ? row[found] : undefined;
-                                    };
-                                    const pMax = parseFloat(get('pressuremax') || 0);
-                                    const p95Val = get('pressure95th');
-                                    return {
-                                        date: String(get('date')),
-                                        usage_hours: parseFloat(get('usagehours') || 0),
-                                        ahi: parseFloat(get('ahi') || 0),
-                                        leak_rate: parseFloat(get('leakrate') || 0),
-                                        pressure_min: parseFloat(get('pressuremin') || 0),
-                                        pressure_max: pMax,
-                                        pressure_avg: parseFloat(get('pressureavg') || 0),
-
-                                    };
-                                });
-
-                                if (mappedData.length === 0) {
-                                    reject(new Error('The CSV file does not contain recognized therapy headers (Date, Usage Hours, AHI, etc.).'));
-                                } else {
-                                    resolve(mappedData);
-                                }
-                            }
-                        } catch (e) {
-                            reject(e || new Error('Internal parsing error during CSV processing'));
-                        }
-                    },
-                    error: (error) => reject(error || new Error('Failed to parse CSV file content')),
-                });
-            }).catch(err => reject(err));
-
+            reject(new Error('Unrecognized device log format. Please ensure you are importing valid Airsine CPAP logs.'));
         } catch (e) {
             reject(e || new Error('Unexpected error in parseCSV'));
         }

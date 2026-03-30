@@ -10,11 +10,16 @@ import {
     SafeAreaView,
     Platform,
     StatusBar,
+    Modal,
+    Animated,
+    TouchableWithoutFeedback,
+    Image,
 } from 'react-native';
 import { Colors, Spacing, Typography } from '../styles/theme';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { getLogs, getPatientInfo } from '../api/database';
+import { useData } from '../context/DataContext';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - Spacing.m * 3) / 2;
@@ -23,6 +28,11 @@ const DashboardScreen = ({ navigation }) => {
     const [logs, setLogs] = useState([]);
     const [patient, setPatient] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
+    const { selectedRange, setSelectedRange } = useData();
+    const [isRangeModalVisible, setIsRangeModalVisible] = useState(false);
+    const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
+    const [modalConfig, setModalConfig] = useState({ title: '', sub: '', icon: 'database-off', color: '#EF4444' });
+    const [fadeAnim] = useState(new Animated.Value(0));
 
     const fetchData = async () => {
         try {
@@ -47,39 +57,123 @@ const DashboardScreen = ({ navigation }) => {
         fetchData().then(() => setRefreshing(false));
     }, []);
 
-    const getSummaryMetrics = () => {
-        if (logs.length === 0) return null;
-        const avgUsage = (logs.reduce((acc, curr) => acc + curr.usage_hours, 0) / logs.length).toFixed(1);
-        const avgAHI = (logs.reduce((acc, curr) => acc + curr.ahi, 0) / logs.length).toFixed(1);
-        const compliance = (logs.filter(l => l.usage_hours >= 4).length / logs.length * 100).toFixed(0);
-        const avgPressure = (logs.reduce((acc, curr) => acc + curr.pressure_avg, 0) / logs.length).toFixed(1);
-        const avgLeak = (logs.reduce((acc, curr) => acc + curr.leak_rate, 0) / logs.length).toFixed(1);
+    const getSummaryMetrics = (data) => {
+        if (!data || data.length === 0) return null;
+        const avgUsage = (data.reduce((acc, curr) => acc + curr.usage_hours, 0) / data.length).toFixed(1);
+        const avgAHI = (data.reduce((acc, curr) => acc + curr.ahi, 0) / data.length).toFixed(1);
+        const compliance = (data.filter(l => l.usage_hours >= 4).length / data.length * 100).toFixed(0);
+        const avgPressure = (data.reduce((acc, curr) => acc + curr.pressure_avg, 0) / data.length).toFixed(1);
+
+        // Filter out extreme leak days (>200) from the average
+        const validLeakLogs = data.filter(l => (l.leak_rate || 0) < 200);
+        const avgLeak = validLeakLogs.length > 0
+            ? (validLeakLogs.reduce((acc, curr) => acc + curr.leak_rate, 0) / validLeakLogs.length).toFixed(1)
+            : '0.0';
 
         return { avgUsage, avgAHI, compliance, avgPressure, avgLeak };
     };
 
-    const metrics = getSummaryMetrics();
+    const filteredLogs = logs.slice(0, selectedRange);
+    const metrics = getSummaryMetrics(filteredLogs);
+
+    const handleRangeSelect = (days) => {
+        setIsRangeModalVisible(false);
+        const actualCount = logs.length;
+
+        if (actualCount === 0) {
+            setModalConfig({
+                title: 'No Data Found',
+                sub: "We couldn't find any therapy records in our database.",
+                icon: 'database-off',
+                color: '#EF4444'
+            });
+            showPopup();
+            return;
+        }
+
+        if (actualCount < days) {
+            setModalConfig({
+                title: 'Partial Data Sync',
+                sub: `You requested ${days} days, but only ${actualCount} days of treatment records are available.`,
+                icon: 'information-variant',
+                color: Colors.primary
+            });
+            showPopup();
+        }
+
+        setSelectedRange(days);
+    };
+
+    const showPopup = () => {
+        setIsInfoModalVisible(true);
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 400,
+                useNativeDriver: true,
+            }),
+            Animated.spring(fadeAnim, {
+                toValue: 1,
+                friction: 8,
+                tension: 40,
+                useNativeDriver: true,
+            })
+        ]).start();
+
+        setTimeout(() => {
+            hidePopup();
+        }, 3000);
+    };
+
+    const hidePopup = () => {
+        Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+        }).start(() => setIsInfoModalVisible(false));
+    };
+
+    const rangeOptions = [
+        { label: '7 Days', value: 7, icon: 'calendar-7' },
+        { label: '1 Month', value: 30, icon: 'calendar-month' },
+        { label: '6 Months', value: 180, icon: 'calendar-range' },
+        { label: '1 Year', value: 365, icon: 'calendar-star' },
+    ];
     console.log('Metrics:', metrics);
 
     const SummaryCard = ({ title, value, unit, icon, color, subtitle, trend }) => (
         <View style={styles.modernCard}>
+            {/* Modern Abstract Ambient Background */}
+            <View style={[styles.bgShapeLarge, { backgroundColor: color }]} />
+            <View style={[styles.bgShapeSmall, { backgroundColor: color }]} />
+            <Image
+                source={{ uri: 'https://www.transparenttextures.com/patterns/diagonal-striped-brick.png' }}
+                style={styles.cardBgTexture}
+                resizeMode="repeat"
+            />
+
             <View style={styles.cardTop}>
-                <View style={[styles.modernIconCircle, { backgroundColor: color + '10' }]}>
-                    <Icon name={icon} size={20} color={color} />
+                <View style={styles.cardTitleArea}>
+                    <Text style={styles.modernLabel}>{title}</Text>
+                    <Text style={styles.modernSub}>{subtitle}</Text>
+                </View>
+                <View style={[styles.modernIconCircle, { backgroundColor: color + '15' }]}>
+                    <Icon name={icon} size={22} color={color} />
+                </View>
+            </View>
+
+            <View style={styles.cardBottom}>
+                <View style={styles.modernValueRow}>
+                    <Text style={[styles.modernValue, { color: color }]}>{value}</Text>
+                    <Text style={styles.modernUnit}>{unit}</Text>
                 </View>
                 {trend && (
                     <View style={styles.trendBadge}>
-                        <Icon name="trending-up" size={10} color={Colors.success} />
+                        <Icon name="trending-up" size={14} color={Colors.success} />
                     </View>
                 )}
             </View>
-            <Text style={styles.modernLabel}>{title}</Text>
-            <View style={styles.modernValueRow}>
-                <Text style={styles.modernValue}>{value}</Text>
-                <Text style={styles.modernUnit}>{unit}</Text>
-            </View>
-            <View style={styles.modernDivider} />
-            <Text style={styles.modernSub}>{subtitle}</Text>
+            <View style={[styles.accentLine, { backgroundColor: color }]} />
         </View>
     );
 
@@ -89,9 +183,31 @@ const DashboardScreen = ({ navigation }) => {
 
             {/* Elegant Header - Theme Matched */}
             <View style={styles.brandHeader}>
-                <View>
-                    <Text style={styles.brandGreeting}>Patient Dashboard</Text>
-                    <Text style={styles.brandName}>{patient?.name || 'User'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                        width: 45,
+                        height: 45,
+                        marginRight: 15,
+                        borderRadius: 22.5,
+                        backgroundColor: '#FFF',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        elevation: 2, // Slight depth
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 2,
+                    }}>
+                        <Image
+                            source={require('../assets/img/logo1.png')}
+                            style={{ width: 30, height: 30 }}
+                            resizeMode="contain"
+                        />
+                    </View>
+                    <View>
+                        <Text style={styles.brandGreeting}>Patient Dashboard</Text>
+                        <Text style={styles.brandName}>{patient?.name || 'User'}</Text>
+                    </View>
                 </View>
                 <TouchableOpacity
                     style={styles.profileBtn}
@@ -109,7 +225,18 @@ const DashboardScreen = ({ navigation }) => {
             >
                 <View style={styles.sectionHeaderRow}>
                     <Text style={styles.modernSectionTitle}>Therapy Overview</Text>
-                    <Text style={styles.dateRange}>{logs.length > 7 ? '7 Days' : `${logs.length} Days`}</Text>
+                    <TouchableOpacity
+                        style={styles.rangeSelector}
+                        onPress={() => setIsRangeModalVisible(true)}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.dateRange}>
+                            {selectedRange === 7 ? '7 Days' :
+                                selectedRange === 30 ? '1 Month' :
+                                    selectedRange === 180 ? '6 Months' : '1 Year'}
+                        </Text>
+                        <Icon name="chevron-down" size={14} color={Colors.primary} style={{ marginLeft: 2 }} />
+                    </TouchableOpacity>
                 </View>
 
                 {metrics ? (
@@ -227,6 +354,89 @@ const DashboardScreen = ({ navigation }) => {
             >
                 <Icon name="plus" size={24} color="#FFF" />
             </TouchableOpacity>
+
+            {/* Range Selection Modal */}
+            <Modal
+                visible={isRangeModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsRangeModalVisible(false)}
+            >
+                <TouchableWithoutFeedback onPress={() => setIsRangeModalVisible(false)}>
+                    <View style={styles.modalOverlay}>
+                        <Animated.View style={styles.rangeMenu}>
+                            <Text style={styles.menuTitle}>Select Duration</Text>
+                            {rangeOptions.map((opt, index) => {
+                                // Enable logic: 
+                                // 1. First option (7 Days) is always active
+                                // 2. Others are active if logs exceed previous range's threshold
+                                const prevThreshold = index > 0 ? rangeOptions[index - 1].value : 0;
+                                const isAvailable = index === 0 || logs.length > prevThreshold;
+                                const isDisabled = !isAvailable;
+
+                                return (
+                                    <TouchableOpacity
+                                        key={opt.value}
+                                        style={[
+                                            styles.rangeOption,
+                                            selectedRange === opt.value && styles.selectedOption,
+                                            isDisabled && styles.disabledOption
+                                        ]}
+                                        onPress={() => !isDisabled && handleRangeSelect(opt.value)}
+                                        disabled={isDisabled}
+                                    >
+                                        <Icon
+                                            name={opt.icon}
+                                            size={20}
+                                            color={isDisabled ? '#CBD5E1' : (selectedRange === opt.value ? Colors.primary : '#64748B')}
+                                        />
+                                        <Text style={[
+                                            styles.rangeOptionText,
+                                            selectedRange === opt.value && styles.selectedOptionText,
+                                            isDisabled && styles.disabledOptionText
+                                        ]}>
+                                            {opt.label}
+                                            {isDisabled && <Text style={styles.insufficientText}> (Need {'>'}{prevThreshold} days)</Text>}
+                                        </Text>
+                                        {selectedRange === opt.value && (
+                                            <Icon name="check-circle" size={18} color={Colors.primary} />
+                                        )}
+                                        {isDisabled && (
+                                            <Icon name="lock" size={16} color="#CBD5E1" />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </Animated.View>
+                    </View>
+                </TouchableWithoutFeedback>
+            </Modal>
+
+            {/* Dynamic Info Popup */}
+            <Modal
+                visible={isInfoModalVisible}
+                transparent={true}
+                animationType="none"
+            >
+                <View style={styles.noDataOverlay}>
+                    <Animated.View style={[
+                        styles.noDataPopup,
+                        {
+                            opacity: fadeAnim,
+                            transform: [
+                                { scale: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
+                                { translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }
+                            ]
+                        }
+                    ]}>
+                        <View style={[styles.noDataIconBg, { backgroundColor: modalConfig.color + '15' }]}>
+                            <Icon name={modalConfig.icon} size={32} color={modalConfig.color} />
+                        </View>
+                        <Text style={styles.noDataTitle}>{modalConfig.title}</Text>
+                        <Text style={styles.noDataSub}>{modalConfig.sub}</Text>
+                    </Animated.View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -241,9 +451,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: Spacing.m,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
-        paddingBottom: 14,
-        backgroundColor: Colors.primary,
+        paddingBottom: 10,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+        backgroundColor: Colors.primary, // Deep Medical Green
+        borderBottomLeftRadius: 0,
+        borderBottomRightRadius: 0,
+        elevation: 8,
     },
     brandGreeting: {
         fontSize: 10,
@@ -289,10 +502,118 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: Colors.primary,
         fontWeight: '700',
+    },
+    rangeSelector: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#F0F7FF',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E0EEFF',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    rangeMenu: {
+        backgroundColor: '#FFF',
+        width: width * 0.8,
+        borderRadius: 24,
+        padding: 20,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+    },
+    menuTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1E293B',
+        marginBottom: 15,
+        textAlign: 'center',
+    },
+    rangeOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 16,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    selectedOption: {
+        borderColor: Colors.primary + '30',
+        backgroundColor: Colors.primary + '08',
+    },
+    rangeOptionText: {
+        flex: 1,
+        fontSize: 15,
+        color: '#475569',
+        fontWeight: '600',
+        marginLeft: 12,
+    },
+    selectedOptionText: {
+        color: Colors.primary,
+        fontWeight: '700',
+    },
+    disabledOption: {
+        backgroundColor: '#F8FAFC',
+        borderColor: '#F1F5F9',
+        opacity: 0.6,
+    },
+    disabledOptionText: {
+        color: '#94A3B8',
+        fontWeight: 'normal',
+    },
+    insufficientText: {
+        fontSize: 9,
+        color: '#94A3B8',
+        fontStyle: 'italic',
+    },
+    noDataOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    noDataPopup: {
+        backgroundColor: '#FFF',
+        width: width * 0.75,
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        elevation: 20,
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+    },
+    noDataIconBg: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#FEF2F2',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    noDataTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1E293B',
+        marginBottom: 8,
+    },
+    noDataSub: {
+        fontSize: 13,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 18,
     },
     modernMetricsGrid: {
         flexDirection: 'row',
@@ -302,69 +623,113 @@ const styles = StyleSheet.create({
     modernCard: {
         backgroundColor: '#FFF',
         width: CARD_WIDTH,
-        borderRadius: 16,
-        padding: 12,
-        marginBottom: 10,
-        borderWidth: 1.2,
+        borderRadius: 20,
+        padding: 16,
+        paddingBottom: 18,
+        marginBottom: 12,
+        borderWidth: 1,
         borderColor: '#F1F5F9',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 5,
+        elevation: 4,
+        shadowColor: '#94A3B8',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        overflow: 'hidden',
     },
     cardTop: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
+        alignItems: 'flex-start',
+        marginBottom: 10,
+    },
+    cardTitleArea: {
+        flex: 1,
+        paddingRight: 8,
     },
     modernIconCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
+        width: 38,
+        height: 38,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 1, // Keep above background
+    },
+    bgShapeLarge: {
+        position: 'absolute',
+        width: 130,
+        height: 130,
+        borderRadius: 75,
+        top: -40,
+        right: -50,
+        opacity: 0.04,
+    },
+    bgShapeSmall: {
+        position: 'absolute',
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        bottom: -30,
+        left: -20,
+        opacity: 0.04,
+    },
+    cardBgTexture: {
+        ...StyleSheet.absoluteFillObject,
+        opacity: 0.35,
+        tintColor: '#94A3B8',
     },
     trendBadge: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        backgroundColor: '#E8F5E9',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#ECFDF5',
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 1,
+    },
+    cardBottom: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        marginTop: 6,
     },
     modernLabel: {
-        fontSize: 11,
-        color: Colors.textSecondary,
-        fontWeight: '600',
+        fontSize: 12,
+        color: '#475569',
+        fontWeight: 'bold',
+        marginBottom: 3,
+    },
+    modernSub: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#94A3B8',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     modernValueRow: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        marginTop: 2,
     },
     modernValue: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: Colors.text,
+        fontSize: 26,
+        fontWeight: '900',
     },
     modernUnit: {
-        fontSize: 10,
-        marginLeft: 3,
-        color: Colors.textSecondary,
-        fontWeight: '500',
+        fontSize: 11,
+        marginLeft: 4,
+        color: '#64748B',
+        fontWeight: '600',
     },
     modernDivider: {
         height: 1,
         backgroundColor: '#F1F5F9',
         marginVertical: 6,
     },
-    modernSub: {
-        fontSize: 8,
-        fontWeight: '800',
-        color: Colors.primary,
-        textTransform: 'uppercase',
+    accentLine: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 4,
     },
     premiumBanner: {
         backgroundColor: Colors.primary,
@@ -395,7 +760,7 @@ const styles = StyleSheet.create({
     },
     premiumSubText: {
         fontSize: 10,
-        color: '#E3F2FD',
+        color: '#D1FAE5', // Light Green text
         marginTop: 0,
     },
     premiumBtn: {
@@ -432,7 +797,7 @@ const styles = StyleSheet.create({
         width: 34,
         height: 34,
         borderRadius: 17,
-        backgroundColor: '#F0F7FF',
+        backgroundColor: Colors.surface, // Green tint
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 10,
@@ -475,13 +840,13 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     emptyCard: {
-        backgroundColor: '#F8FBFF',
+        backgroundColor: Colors.surface,
         borderRadius: 16,
         padding: 25,
         alignItems: 'center',
         borderStyle: 'dashed',
         borderWidth: 1.5,
-        borderColor: '#D1E3F8',
+        borderColor: Colors.border,
     },
     emptyText: {
         marginTop: 8,

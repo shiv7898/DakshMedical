@@ -14,6 +14,7 @@ import {
     StatusBar,
     Keyboard,
     Animated,
+    Image,
     useWindowDimensions,
 } from 'react-native';
 import { Colors } from '../styles/theme';
@@ -37,6 +38,12 @@ const LoginScreen = ({ navigation }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(30)).current;
     const cardScale = useRef(new Animated.Value(0.95)).current;
+    const logoScale = useRef(new Animated.Value(0)).current;
+    const logoFloat = useRef(new Animated.Value(0)).current;
+    const glowPulse = useRef(new Animated.Value(1)).current;
+    const titleFade = useRef(new Animated.Value(0)).current;
+    const titleSlide = useRef(new Animated.Value(20)).current;
+    const scrollRef = useRef(null);
 
     useEffect(() => {
         Animated.parallel([
@@ -56,8 +63,59 @@ const LoginScreen = ({ navigation }) => {
                 friction: 8,
                 tension: 40,
                 useNativeDriver: true,
+            }),
+            Animated.spring(logoScale, {
+                toValue: 1,
+                friction: 5,
+                tension: 40,
+                delay: 300,
+                useNativeDriver: true,
+            }),
+            Animated.timing(titleFade, {
+                toValue: 1,
+                duration: 1000,
+                delay: 600,
+                useNativeDriver: true,
+            }),
+            Animated.timing(titleSlide, {
+                toValue: 0,
+                duration: 1000,
+                delay: 600,
+                useNativeDriver: true,
             })
         ]).start();
+
+        // Logo Floating Animation
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(logoFloat, {
+                    toValue: 1,
+                    duration: 2000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(logoFloat, {
+                    toValue: 0,
+                    duration: 2000,
+                    useNativeDriver: true,
+                })
+            ])
+        ).start();
+
+        // Glow Pulsing Animation
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(glowPulse, {
+                    toValue: 1.2,
+                    duration: 1500,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(glowPulse, {
+                    toValue: 1,
+                    duration: 1500,
+                    useNativeDriver: true,
+                })
+            ])
+        ).start();
 
         const keyboardDidShowListener = Keyboard.addListener(
             'keyboardDidShow',
@@ -65,7 +123,10 @@ const LoginScreen = ({ navigation }) => {
         );
         const keyboardDidHideListener = Keyboard.addListener(
             'keyboardDidHide',
-            () => setKeyboardVisible(false)
+            () => {
+                setKeyboardVisible(false);
+                scrollRef.current?.scrollTo({ y: 0, animated: true });
+            }
         );
 
         return () => {
@@ -103,7 +164,15 @@ const LoginScreen = ({ navigation }) => {
                     style={{ flex: 1 }}
                 >
                     <ScrollView
-                        contentContainerStyle={styles.scrollContent}
+                        ref={scrollRef}
+                        contentContainerStyle={[
+                            styles.scrollContent,
+                            {
+                                paddingTop: insets.top + (isKeyboardVisible ? 20 : 0),
+                                minHeight: SCREEN_HEIGHT
+                            }
+                        ]}
+                        scrollEnabled={isKeyboardVisible}
                         showsVerticalScrollIndicator={false}
                         keyboardShouldPersistTaps="handled"
                         bounces={false}
@@ -118,13 +187,41 @@ const LoginScreen = ({ navigation }) => {
                             ]}
                         >
                             <View style={styles.logoContainer}>
-                                <View style={styles.logoPulse}>
-                                    <Activity size={38} color="#FFF" strokeWidth={2.5} />
-                                </View>
-                                <View style={styles.glowEffect} />
+                                <Animated.View style={[
+                                    styles.glowEffect,
+                                    {
+                                        transform: [{ scale: glowPulse }],
+                                        opacity: glowPulse.interpolate({ inputRange: [1, 1.2], outputRange: [0.15, 0.05] })
+                                    }
+                                ]} />
+                                <Animated.View style={{
+                                    transform: [
+                                        // { scale: logoScale },
+                                        // {
+                                        //     translateY: logoFloat.interpolate({
+                                        //         inputRange: [0, 1],
+                                        //         outputRange: [0, -8]
+                                        //     })
+                                        // }
+                                    ]
+                                }}>
+                                    <View style={styles.logoCircle}>
+                                        <Image
+                                            source={require('../assets/img/logo1.png')}
+                                            style={styles.logoImage}
+                                            resizeMode="contain"
+                                        />
+                                    </View>
+                                </Animated.View>
                             </View>
-                            <Text style={styles.brandName}>AIRSINE</Text>
-                            <Text style={styles.brandTagline}>VITAL MONITORING SYSTEMS</Text>
+                            <Animated.Text style={[
+                                styles.brandName,
+                                {
+                                    opacity: titleFade,
+                                    transform: [{ translateY: titleSlide }, { scale: titleFade.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }]
+                                }
+                            ]}>AIRSINE</Animated.Text>
+                            <Animated.Text style={[styles.brandTagline, { opacity: titleFade }]}>VITAL MONITORING SYSTEMS</Animated.Text>
                         </Animated.View>
 
                         <Animated.View
@@ -230,86 +327,99 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#050B18', // Very deep navy/black
+        backgroundColor: Colors.secondary, // Deep Medical Green
         textAlign: 'center',
     },
     bgCircle: {
         position: 'absolute',
         borderRadius: 1000,
-        opacity: 0.15,
     },
     circle1: {
-        top: -100,
-        right: -140,
-        backgroundColor: '#1E88E5',
+        top: -170,
+        right: -100,
+        width: 100,
+        height: 100,
+        backgroundColor: Colors.primary,
+        opacity: 0.14,
     },
     circle2: {
-        bottom: -50,
-        left: -80,
-        backgroundColor: '#6366F1',
+        bottom: -60,
+        left: -60,
+        width: 350,
+        height: 350,
+        backgroundColor: Colors.primary,
+        opacity: 0.08,
     },
     circle3: {
-        top: '40%',
-        right: -50,
-        backgroundColor: '#0EA5E9',
-        opacity: 0.1,
+        top: '30%',
+        left: -50,
+        width: 200,
+        height: 200,
+        backgroundColor: Colors.accent,
+        opacity: 0.05,
     },
     scrollContent: {
-        flexGrow: 1,
-        justifyContent: 'flex-start',
+        justifyContent: 'center',
         paddingHorizontal: 28,
-        paddingTop: Platform.OS === 'ios' ? insets.top + 10 : (StatusBar.currentHeight || 24) + 10,
-        // paddingBottom: 40,
+        paddingBottom: 40,
     },
     header: {
+
         alignItems: 'center',
         marginBottom: 10,
-        marginTop: 10,
+        // marginTop: 10,
     },
     logoContainer: {
-        width: 60,
-        height: 60,
+        width: 100,
+        height: 100,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 15,
+        marginBottom: 5,
     },
-    logoPulse: {
-        width: 56,
-        height: 56,
-        borderRadius: 16,
-        backgroundColor: Colors.primary,
+    logoCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 50,
+        backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 2,
-        elevation: 12,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.3)',
+        elevation: 4,
         shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.5,
-        shadowRadius: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+    },
+    logoImage: {
+        width: 80,
+        height: 80,
     },
     glowEffect: {
         position: 'absolute',
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(30, 136, 229, 0.2)',
+        width: 100,
+        height: 100,
+        borderRadius: 65,
+        backgroundColor: Colors.primary,
         zIndex: 1,
     },
     brandName: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: '900',
-        color: '#FFFFFF',
-        letterSpacing: 4,
+        color: Colors.primary,
+        letterSpacing: 6,
         textAlign: 'center',
+        textShadowColor: 'rgba(16, 185, 129, 0.3)',
+        textShadowOffset: { width: 0, height: 4 },
+        textShadowRadius: 10,
     },
     brandTagline: {
-        fontSize: 9,
+        fontSize: 10,
         fontWeight: '700',
-        color: 'rgba(255, 255, 255, 0.4)',
-        letterSpacing: 2.5,
-        marginTop: 4,
+        color: 'rgba(15, 93, 86, 0.5)',
+        letterSpacing: 3,
+        marginTop: 6,
         textTransform: 'uppercase',
     },
     content: {
@@ -317,17 +427,16 @@ const styles = StyleSheet.create({
         zIndex: 10,
     },
     card: {
-        backgroundColor: 'rgba(255, 255, 255, 0.98)',
-        borderRadius: 22,
-        padding: 24,
-        elevation: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-
+        backgroundColor: 'rgba(255, 255, 255, 0.94)',
+        borderRadius: 32,
+        padding: 30,
+        elevation: 20,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.15,
+        shadowRadius: 25,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255, 255, 255, 0.6)',
     },
     cardHeader: {
         flexDirection: 'row',
@@ -338,7 +447,7 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 18,
         fontWeight: '800',
-        color: '#0F172A',
+        color: '#345e4dff',
         marginLeft: 8,
         textAlign: 'center',
     },
@@ -438,13 +547,13 @@ const styles = StyleSheet.create({
     footerText: {
         fontSize: 10,
         fontWeight: '700',
-        color: 'rgba(255, 255, 255, 0.4)',
+        color: 'rgba(15, 93, 86, 0.5)',
         letterSpacing: 1,
     },
     versionText: {
         fontSize: 9,
         fontWeight: '600',
-        color: 'rgba(255, 255, 255, 0.25)',
+        color: 'rgba(15, 93, 86, 0.5)',
         letterSpacing: 2,
         marginTop: 4,
     },

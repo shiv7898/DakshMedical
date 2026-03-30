@@ -16,39 +16,53 @@ import {
 import { Colors, Spacing, Typography } from '../styles/theme';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { generatePDF as createPDF } from 'react-native-html-to-pdf';
+import { useFocusEffect } from '@react-navigation/native';
 import ViewShot from 'react-native-view-shot';
 import Share from 'react-native-share';
 import { LineChart, BarChart, StackedBarChart } from 'react-native-chart-kit';
 import RNFS from 'react-native-fs';
 import { getLogs, getPatientInfo } from '../api/database';
+import { useData } from '../context/DataContext';
 
 const { width } = Dimensions.get('window');
 
 const ReportPreviewScreen = () => {
     const [logs, setLogs] = useState([]);
+    const [graphLogs9, setGraphLogs9] = useState([]);
+    const [graphLogs7, setGraphLogs7] = useState([]);
     const [patient, setPatient] = useState(null);
     const [generating, setGenerating] = useState(false);
-    const pressureChartRef = useRef(null);
+    const { selectedRange } = useData();
+    const pressureGridRef = useRef(null);
     const flowChartRef = useRef(null);
     const ahiMiniChartRef = useRef(null);
     const leakMiniChartRef = useRef(null);
-    const maskMiniChartRef = useRef(null);
 
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const fetchData = async () => {
+    const fetchData = React.useCallback(async () => {
         try {
-            const logData = await getLogs();
-            const patientData = await getPatientInfo();
-            setLogs(logData || []);
+            console.log('⚡ Optimized Fetch: Report Data (Range:', selectedRange, ')');
+            const [logData, patientData] = await Promise.all([getLogs(), getPatientInfo()]);
+
+            const tableLogs = (logData || []).slice(0, selectedRange);
+            const reportGraphLogs9 = (logData || []).slice(0, 9);
+            const reportGraphLogs7 = (logData || []).slice(0, 7);
+
+            // Consolidate updates to reduce re-renders
+            setLogs(tableLogs);
+            setGraphLogs9(reportGraphLogs9);
+            setGraphLogs7(reportGraphLogs7);
             setPatient(patientData || { name: 'Daksh Singh', age: 32, machine_serial: 'AIR-9922-G3' });
         } catch (error) {
             console.error('Error fetching data for report:', error);
             setLogs([]);
         }
-    };
+    }, [selectedRange]);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchData();
+        }, [fetchData])
+    );
 
     const calculateSummary = () => {
         if (logs.length === 0) return null;
@@ -63,7 +77,22 @@ const ReportPreviewScreen = () => {
         const avgAHI = (validLogs.reduce((acc, curr) => acc + (parseFloat(curr.ahi) || 0), 0) / totalDays).toFixed(1);
         const avgPressure = (validLogs.reduce((acc, curr) => acc + (parseFloat(curr.pressure_avg) || 0), 0) / totalDays).toFixed(1);
 
-        return { totalDays, compliantDays, compliancePct, avgUsage, avgAHI, avgPressure };
+        // Filter out extreme leak days (>200) from the average
+        const validLeakLogs = validLogs.filter(l => (parseFloat(l.leak_rate) || 0) < 200);
+        const avgLeak = validLeakLogs.length > 0
+            ? (validLeakLogs.reduce((acc, curr) => acc + (parseFloat(curr.leak_rate) || 0), 0) / validLeakLogs.length).toFixed(1)
+            : '0.0';
+
+        return { totalDays, compliantDays, compliancePct, avgUsage, avgAHI, avgPressure, avgLeak };
+    };
+
+    const formatHoursToHHMM = (decimalHours) => {
+        const val = parseFloat(decimalHours);
+        if (isNaN(val)) return '00:00';
+        const totalMinutes = Math.round(val * 60);
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     };
 
     // Capture a single chart ref safely
@@ -86,12 +115,14 @@ const ReportPreviewScreen = () => {
 
         setGenerating(true);
         try {
+            // Small delay to ensure charts are fully rendered in their hidden container before capture
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
             // Capture each graph separately
-            const pressureImg = await captureChart(pressureChartRef);
+            const pressureGridImg = await captureChart(pressureGridRef);
             const flowImg = await captureChart(flowChartRef);
             const ahiImg = await captureChart(ahiMiniChartRef);
             const leakImg = await captureChart(leakMiniChartRef);
-            const maskImg = await captureChart(maskMiniChartRef);
 
             const summary = calculateSummary();
             const dateStr = new Date().toLocaleDateString('en-IN');
@@ -120,19 +151,64 @@ const ReportPreviewScreen = () => {
                 const maskOff = (log.mask_off_count || 0);
                 const maskColor = maskOff > 0 ? '#D32F2F' : '#555';
                 const apneaStr = apneaLabel(log);
+
+                let detailsStr = "";
+                if (log.therapy_type === 'CPAP') {
+                    detailsStr = `
+                        <div style="text-align:left; font-size:7.5px; line-height:1.3; font-weight:normal; padding:2px;">
+                        
+                          Avg Ramp Start Press: ${Number(log.ramp_start_pressure || 0).toFixed(1)}<br/>
+                          Set Pressure: ${Number(log.avg_set_pressure || 0).toFixed(1)}<br/>
+                          Pressure Off: ${Number(log.pressure_off || 0)}<br/>
+                          Avg Ramp Duration: ${log.ramp_duration || 0}
+                        </div>
+                    `;
+                } else if (log.therapy_type === 'APAP') {
+                    detailsStr = `
+                        <div style="text-align:left; font-size:7.5px; line-height:1.3; font-weight:normal; padding:2px;">
+                          
+                          Avg Ramp Start Press: ${Number(log.ramp_start_pressure || 0).toFixed(1)}<br/>
+                          Min: ${Number(log.pressure_min || 0).toFixed(1)} / Max: ${Number(log.pressure_max || 0).toFixed(1)}<br/>
+                          Pressure Off: ${Number(log.pressure_off || 0)}<br/>
+                          Avg Ramp Duration: ${log.ramp_duration || 0}
+                        </div>
+                    `;
+                } else if (log.therapy_type === 'Mixed') {
+                    detailsStr = `
+                        <div style="text-align:left; font-size:7.5px; line-height:1.3; font-weight:normal; padding:2px;">
+                          
+                          Avg Ramp Start Press: ${Number(log.ramp_start_pressure || 0).toFixed(1)}<br/>
+                          Set (CPAP): ${Number(log.avg_set_pressure || 0).toFixed(1)}<br/>
+                          Min (APAP): ${Number(log.pressure_min || 0).toFixed(1)} / Max: ${Number(log.pressure_max || 0).toFixed(1)}<br/>
+                          Pressure Off: ${Number(log.pressure_off || 0)}<br/>
+                          Avg Ramp Duration: ${log.ramp_duration || 0}
+                        </div>
+                    `;
+                } else {
+                    detailsStr = `
+                        <div style="text-align:left; font-size:7.5px; line-height:1.3; font-weight:normal; padding:2px;">
+                          <b style="color:#065F46;">${log.therapy_type}</b><br/>
+                          Avg Pressure: ${Number(log.pressure_avg || 0).toFixed(1)}
+                        </div>
+                    `;
+                }
+
                 return `
                     <tr style="background:${rowBg};">
                         <td>${log.date || '--'}</td>
-                        <td>${(log.usage_hours || 0)} ${usageBadge}</td>
+                        <td>${formatHoursToHHMM(log.usage_hours)} ${usageBadge}</td>
                         <td>${log.therapy_type || 'CPAP'}</td>
-                        <td>${(log.avg_set_pressure || 0)}</td>
+                        <td>${detailsStr}</td>
                         <td>${(log.pressure_avg || 0)}</td>
                         <td>${(log.avg_flow || 0)}</td>
                         <td>${(log.leak_rate || 0)}</td>
                         <td>${(log.avg_resp_rate || 0)}</td>
-                        <td style="color:${ahiColor};font-weight:bold;">${(log.ahi || 0)}</td>
-                        <td>${apneaStr}</td>
-                        <td style="color:${maskColor};font-weight:bold;">${maskOff}</td>
+                        <td style="color:${ahiColor};font-weight:bold;">
+                            ${(log.ahi || 0)}<br/>
+                            <span style="font-size:7px;color:#607D8B;font-weight:normal;">${apneaStr}</span>
+                        </td>
+                        <td>${log.mask_fault_count || 0}</td>
+                        <td>${log.low_pressure_count || 0}</td>
                     </tr>
                 `;
             }).join('');
@@ -141,8 +217,8 @@ const ReportPreviewScreen = () => {
             const graphSection = (title, imgBase64) => {
                 if (!imgBase64) return '';
                 return `
-                    <div style="page-break-inside:avoid; margin-bottom:26px; background:#fff; border:1px solid #edf2f7; border-radius:12px; padding:15px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <div style="font-size:13px; font-weight:bold; color:#1e293b; border-left:4px solid #3b82f6; padding-left:10px; margin-bottom:12px;">${title}</div>
+                    <div style="page-break-inside:avoid; margin-bottom:26px; background:#fff; border:1px solid #D1FAE5; border-radius:12px; padding:15px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="font-size:13px; font-weight:bold; color:#064E3B; border-left:4px solid #10B981; padding-left:10px; margin-bottom:12px;">${title}</div>
                         <div style="text-align:center;">
                             <img src="data:image/jpeg;base64,${imgBase64}" style="width:100%; max-width:420px; border-radius:6px;" />
                         </div>
@@ -150,7 +226,7 @@ const ReportPreviewScreen = () => {
                 `;
             };
 
-            const hasGraphs = pressureImg || flowImg || ahiImg || leakImg || maskImg;
+            const hasGraphs = pressureGridImg || flowImg || ahiImg || leakImg;
 
             const htmlContent = `<!DOCTYPE html>
 <html>
@@ -161,62 +237,61 @@ const ReportPreviewScreen = () => {
 body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;}
 .page1{padding:34px 38px 28px 38px;page-break-after:always;}
 .page2{padding:34px 38px 28px 38px;page-break-after:always;}
-.page3{padding:34px 38px 28px 38px;}
+.page3{padding:34px 38px 28px 38px; height: 1040px; position: relative;}
 .hdr-banner{
-    background:linear-gradient(135deg,#1565C0 0%,#1E88E5 60%,#42A5F5 100%);
-    color:#fff;padding:16px 22px;border-radius:10px;margin-bottom:18px;
+    background:#ffffff;border:2px solid #065F46;
+    color:#065F46;padding:16px 22px;border-radius:10px;margin-bottom:18px;
     display:flex;align-items:center;justify-content:space-between;
 }
 .hdr-banner h1{font-size:20px;font-weight:bold;letter-spacing:1px;}
-.hdr-banner .hdr-sub{font-size:10px;margin-top:3px;opacity:0.88;}
-.hdr-right{text-align:right;font-size:10px;opacity:0.9;line-height:1.7;}
+.hdr-banner .hdr-sub{font-size:10px;margin-top:3px;color:#065F46;}
+.hdr-right{text-align:right;font-size:10px;color:#065F46;line-height:1.7;}
 .sec{margin-top:14px;}
 .sec-title{
-    font-size:12px;font-weight:bold;color:#1565C0;
-    border-left:4px solid #1E88E5;padding-left:8px;margin-bottom:9px;
+    font-size:12px;font-weight:bold;color:#065F46;
+    border-left:4px solid #10B981;padding-left:8px;margin-bottom:9px;
 }
 .ig{width:100%;border-collapse:collapse;}
 .ig td{padding:4px 7px;font-size:11px;vertical-align:middle;}
-.lbl{color:#607D8B;font-weight:bold;width:130px;white-space:nowrap;}
+.lbl{color:#374151;font-weight:bold;width:130px;white-space:nowrap;}
 .val{color:#1a1a2e;}
-.hr-blue{border:none;border-top:2px solid #1E88E5;margin:14px 0;}
-.hr-dash{border:none;border-top:1.5px dashed #90CAF9;margin:12px 0;}
-.hr-light{border:none;border-top:1px solid #E3F2FD;margin:10px 0;}
+.hr-blue{border:none;border-top:2px solid #10B981;margin:14px 0;}
+.hr-dash{border:none;border-top:1.5px dashed #34D399;margin:12px 0;}
+.hr-light{border:none;border-top:1px solid #D1FAE5;margin:10px 0;}
 .stats-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .sc{
-    flex:1;min-width:78px;background:#F0F7FF;
-    border:1px solid #BBDEFB;border-radius:8px;padding:9px 6px;text-align:center;
+    flex:1;min-width:78px;background:#ffffff;
+    border:1px solid #D1FAE5;border-radius:8px;padding:9px 6px;text-align:center;
 }
-.sc-v{font-size:17px;font-weight:bold;color:#1565C0;line-height:1.15;}
-.sc-l{font-size:9px;color:#607D8B;margin-top:3px;line-height:1.3;}
+.sc-v{font-size:17px;font-weight:bold;color:#10B981;line-height:1.15;}
+.sc-l{font-size:9px;color:#4B5563;margin-top:3px;line-height:1.3;}
 .comp-box{display:flex;gap:10px;margin-bottom:14px;}
 .ci{flex:1;border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:10px;}
-.ci.green{background:#E8F5E9;border:1px solid #A5D6A7;}
-.ci.orange{background:#FFF8E1;border:1px solid #FFE082;}
+.ci.green{background:#ffffff;border:1px solid #10B981;}
+.ci.orange{background:#ffffff;border:1px solid #F59E0B;}
 .ci-num{font-size:24px;font-weight:bold;}
-.ci.green .ci-num{color:#2E7D32;}
-.ci.orange .ci-num{color:#E65100;}
+.ci.green .ci-num{color:#059669;}
+.ci.orange .ci-num{color:#D97706;}
 .ci-desc{font-size:10px;color:#444;line-height:1.45;}
 .dt{width:100%;border-collapse:collapse;font-size:9.5px;margin-top:6px;}
 .dt th{
-    background:#1565C0;color:#fff;padding:5px 3px;
-    text-align:center;font-size:9px;border:1px solid #1565C0;white-space:nowrap;
+    background:#065F46;color:#fff;padding:5px 3px;
+    text-align:center;font-size:9px;border:1px solid #065F46;white-space:nowrap;
 }
-.dt td{border:1px solid #BBDEFB;padding:5px 3px;text-align:center;vertical-align:middle;}
+.dt td{border:1px solid #D1FAE5;padding:5px 3px;text-align:center;vertical-align:middle;}
 .p2hdr{
-    background:#F0F7FF;border:1px solid #BBDEFB;border-radius:8px;
+    background:#F0FDF4;border:1px solid #D1FAE5;border-radius:8px;
     padding:12px 18px;margin-bottom:18px;
     display:flex;align-items:center;justify-content:space-between;
 }
-.p2hdr h2{font-size:15px;color:#1565C0;}
-.p2hdr span{font-size:10px;color:#607D8B;}
-.patient-line { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 8px; border-bottom: 2px solid #2196F3; margin-bottom: 8px; }
+.p2hdr h2{font-size:15px;color:#065F46;}
+.p2hdr span{font-size:10px;color:#374151;}
+.patient-line { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 8px; border-bottom: 2px solid #10B981; margin-bottom: 8px; }
 .patient-info { display: flex; gap: 25px; }
-.doctor-line { display: flex; gap: 20px; align-items: center; padding: 10px 15px; background: #F8FBFF; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #BBDEFB; }
+.doctor-line { display: flex; gap: 20px; align-items: center; padding: 10px 15px; background: #F0FDF4; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #D1FAE5; }
 .header-item { font-size: 11px; color: #444; }
 .sig-area{
-    margin-top:40px;padding-top:18px;
-    border-top:2px solid #1E88E5;
+    position:absolute; bottom:65px; left:38px; right:38px;
     display:flex;justify-content:space-between;align-items:flex-end;
 }
 .sig-blk{text-align:center;}
@@ -224,8 +299,9 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 .sig-lbl{font-size:10px;color:#333;font-weight:bold;}
 .sig-sub{font-size:9px;color:#90A4AE;margin-top:2px;}
 .footer{
+    position:absolute; bottom:20px; left:38px; right:38px;
     text-align:center;font-size:9px;color:#90A4AE;
-    margin-top:18px;border-top:1px solid #E3F2FD;padding-top:8px;
+    border-top:1px solid #E3F2FD;padding-top:8px;
 }
 </style>
 </head>
@@ -306,6 +382,10 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
             <div class="sc-l">Avg Pressure<br/>(cmH&#8322;O)</div>
         </div>
         <div class="sc">
+            <div class="sc-v">${summary?.avgLeak || 0}</div>
+            <div class="sc-l">Avg Leak<br/>(L/min)</div>
+        </div>
+        <div class="sc">
             <div class="sc-v">${logs.length}</div>
             <div class="sc-l">Days Recorded</div>
         </div>
@@ -342,16 +422,16 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
         <thead>
             <tr>
                 <th>Date</th>
-                <th>Usage (h)</th>
+                <th>Usage (H:M)</th>
                 <th>Mode</th>
-                <th>Set Press<br/>(cmH&#8322;O)</th>
-                <th>Meas Press<br/>(cmH&#8322;O)</th>
+                <th>Therapy<br/>Details</th>
+                <th>Pressure<br/>(cmH&#8322;O)</th>
                 <th>Flow<br/>(L/min)</th>
                 <th>Leak<br/>(L/min)</th>
                 <th>Resp<br/>Rate</th>
                 <th>AHI</th>
-                <th>Apnea<br/>(OA/CA/H)</th>
-                <th>Mask<br/>Fault</th>
+                <th>Count Of Open Mask</th>
+                <th>Count Of Low Pressure</th>
             </tr>
         </thead>
         <tbody>${tableRows}</tbody>
@@ -361,33 +441,45 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 </div>
 <!-- ══════════════ END PAGE 1 ══════════════ -->
 
-<!-- ══════════════ PAGE 2 — Pressure & Flow Trends ══════════════ -->
+<!-- ══════════════ PAGE 2 — Summary Trends (Last 7 Days) ══════════════ -->
 <div class="page2">
     <div class="p2hdr">
-        <h2>&#x1F4C8; Respiratory Trends (Part 1)</h2>
+        <h2>&#x1F4C8; Respiratory Trends Summary</h2>
         <span>Patient: ${patient?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
     </div>
 
-    <div style="margin-top:10px;">
-        ${graphSection('Pressure avg Trend (cmH2O)', pressureImg)}
-        ${graphSection('Avg Flow Rate (L/min)', flowImg)}
+    <div style="margin-top:20px;">
+        <div style="font-size:8px; color:#64748b; margin-bottom:8px; text-align:right;">
+             <span style="color:#00BCD4">●</span> Flow Rate &nbsp;&nbsp; 
+             <span style="color:#EF5350">●</span> Events (AHI) &nbsp;&nbsp; 
+             <span style="color:#FFA726">●</span> Leak (L/m)
+        </div>
+        ${graphSection('Average Flow Rate (L/min)', flowImg)}
+        ${graphSection('Apnea Events (AHI Index / hr)', ahiImg)}
+        ${graphSection('Leak Rate (L/min)', leakImg)}
     </div>
 </div>
 
-<!-- ══════════════ PAGE 3 — Apnea, Leak & Mask Events ══════════════ -->
-<div class="page3">
+<!-- ══════════════ PAGE 3 — 9-Day Clinical Pressure Analysis ══════════════ -->
+<div class="page3" style="height:1040px; position:relative;">
     <div class="p2hdr">
-        <h2>&#x1F4C8; Respiratory Trends (Part 2)</h2>
+        <h2>&#x1F4C8; 9-Day Clinical Pressure Analysis</h2>
         <span>Patient: ${patient?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
     </div>
 
-    <div style="margin-top:10px;">
-        ${graphSection('Apnea Index (AHI)', ahiImg)}
-        ${graphSection('Leak Rate (L/min)', leakImg)}
-        ${graphSection('Mask Off Events Count', maskImg)}
+    <div style="margin-top:10px; background:#fff; border:1px solid #edf2f7; border-radius:12px; padding:15px; text-align:center;">
+        <div style="font-size:11px; font-weight:bold; color:#1e293b; border-left:4px solid #3b82f6; padding-left:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="text-align:left;">Daily Pressure Waveforms & Profiles</div>
+            <div style="font-size:8px; font-weight:normal; color:#64748b;">
+                <span style="color:#1E88E5">●</span> Set Pressure &nbsp; 
+                <span style="color:#EF4444">●</span> Max &nbsp;
+                <span style="color:#14B8A6">●</span> Min
+            </div>
+        </div>
+        ${pressureGridImg ? `<img src="data:image/jpeg;base64,${pressureGridImg}" style="width:100%; max-width:100%; border-radius:6px;" />` : ''}
     </div>
 
-    <!-- Doctor Signature -->
+    <!-- Doctor Signature — POSITIVELY AT THE END -->
     <div class="sig-area">
         <div class="sig-blk">
             <div class="sig-line"></div>
@@ -402,13 +494,13 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
         </div>
         <div class="sig-blk">
             <div class="sig-line"></div>
-            <div class="sig-lbl">Patient / Guardian Signature</div>
+            <div class="sig-lbl">Patient Signature</div>
             <div class="sig-sub">${patient?.name || '-'}</div>
         </div>
     </div>
 
     <div class="footer">
-        Airsine CPAP Therapy Management System &nbsp;|&nbsp; Confidential – For Medical Use Only
+        Airsine CPAP Therapy Management System &nbsp;|&nbsp; Confidential – Medical Use Only
         &nbsp;|&nbsp; Device SN: ${patient?.machine_serial || '-'} &nbsp;|&nbsp; ${dateStr}
     </div>
 </div>
@@ -501,9 +593,12 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
         }
     };
 
-    const reversedLogs = useMemo(() => [...logs].slice(0, 7).reverse(), [logs]);
-    const isBezier = reversedLogs.length > 1;
-    const dates = useMemo(() => reversedLogs.map(l => l.date ? l.date.split('-')[2] : ''), [reversedLogs]);
+    const reversedLogs9 = useMemo(() => [...graphLogs9].reverse(), [graphLogs9]);
+    const reversedLogs7 = useMemo(() => [...graphLogs7].reverse(), [graphLogs7]);
+
+    const dates9 = useMemo(() => reversedLogs9.map(l => l.date ? l.date.split('-')[2] : ''), [reversedLogs9]);
+    const dates7 = useMemo(() => reversedLogs7.map(l => l.date ? l.date.split('-')[2] : ''), [reversedLogs7]);
+
     const summary = useMemo(() => calculateSummary(), [logs]);
 
     const chartConfig = useMemo(() => ({
@@ -511,12 +606,12 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
         backgroundGradientFrom: "#FFFFFF",
         backgroundGradientTo: "#FFFFFF",
         decimalPlaces: 1,
-        color: (opacity = 1) => `rgba(30, 136, 229, ${opacity})`,
-        labelColor: (opacity = 1) => `rgba(96, 125, 139, ${opacity})`,
+        color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+        labelColor: (opacity = 1) => `rgba(55, 65, 81, ${opacity})`,
         style: { borderRadius: 16 },
         propsForDots: { r: "5", strokeWidth: "3", stroke: "#FFF" },
         propsForLabels: { fontSize: 10 },
-        fillShadowGradientFrom: "#3088E5",
+        fillShadowGradientFrom: "#10B981",
         fillShadowGradientTo: "#FFFFFF",
         fillShadowGradientOpacity: 0.1,
     }), []);
@@ -535,78 +630,186 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Hidden off-screen: 3 separate ViewShots for each chart */}
-            <View style={styles.hiddenChartContainer} collapsable={false}>
-                {/* 1. Pressure Avg */}
-                <ViewShot ref={pressureChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
-                    <View style={styles.hiddenChartView}>
-                        {dates.length > 0 && <LineChart
-                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.pressure_avg || 0) }] }}
-                            width={360} height={200}
-                            chartConfig={chartConfig}
-                            formatYLabel={(v) => Number(v).toFixed(2)}
-                            bezier={isBezier}
-                            withInnerLines={true}
-                        />}
-                    </View>
-                </ViewShot>
+            {/* ⚡ Performance Tweak: Only render off-screen charts when actually generating PDF */}
+            {generating && (
+                <View style={styles.hiddenChartContainer} collapsable={false}>
+                    {/* 1. 9-Day Pressure Profile Grid (Matching App UI) */}
+                    <ViewShot ref={pressureGridRef} options={{ format: "png", quality: 0.7, result: "base64" }} collapsable={false}>
+                        <View style={[styles.gridContainer, { backgroundColor: '#FFFFFF' }]}>
+                            {reversedLogs9.map((log, i) => {
+                                const usageH = parseFloat(log.usage_hours) || 0;
+                                const setPres = parseFloat(log.avg_set_pressure || log.pressure_avg) || 0.1;
+                                const minP = parseFloat(log.pressure_min) || 4;
+                                const maxP = parseFloat(log.pressure_max) || setPres;
 
-                {/* 2. Flow Rate */}
-                <ViewShot ref={flowChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
-                    <View style={styles.hiddenChartView}>
-                        {dates.length > 0 && <LineChart
-                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.avg_flow || 0) }] }}
-                            width={360} height={180}
-                            chartConfig={{ ...flowChartConfig, strokeWidth: 1 }}
-                            formatYLabel={(v) => Number(v).toFixed(2)}
-                            bezier={isBezier}
-                            withInnerLines={true}
-                        />}
-                    </View>
-                </ViewShot>
+                                const therapyStr = (log.therapy_type || '').toLowerCase();
+                                const isCPAP = !therapyStr.includes('apap') && !therapyStr.includes('mixed');
+                                const isAPAP = therapyStr.includes('apap') && !therapyStr.includes('mixed');
+                                const isMixed = therapyStr.includes('mixed');
 
-                {/* 3. AHI Mini */}
-                <ViewShot ref={ahiMiniChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
-                    <View style={styles.hiddenChartView}>
-                        {dates.length > 0 && <LineChart
-                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.ahi || 0) }] }}
-                            width={360} height={170}
-                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` }}
-                            bezier={isBezier}
-                            withInnerLines={true}
-                            withDots={true}
-                        />}
-                    </View>
-                </ViewShot>
+                                const badgeIcon = isCPAP ? 'lungs' : isAPAP ? 'wave' : 'swap-horizontal';
+                                const stripeColor = isCPAP ? '#1E88E5' : isAPAP ? '#7C3AED' : '#14B8A6';
 
-                {/* 4. Leak Mini */}
-                <ViewShot ref={leakMiniChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
-                    <View style={styles.hiddenChartView}>
-                        {dates.length > 0 && <LineChart
-                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.leak_rate || 0) }] }}
-                            width={360} height={170}
-                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` }}
-                            bezier={isBezier}
-                            withInnerLines={true}
-                            withDots={true}
-                        />}
-                    </View>
-                </ViewShot>
+                                const totalMins = usageH * 60;
+                                const endLabel = totalMins > 0
+                                    ? `${String(Math.floor(totalMins / 60)).padStart(2, '0')}:${String(Math.floor(totalMins % 60)).padStart(2, '0')}`
+                                    : '00:00';
+                                const midMins = totalMins / 4;
+                                const xLabels = [0, 1, 2, 3, 4].map(s => {
+                                    const m = s * midMins;
+                                    return s === 0 ? '00:00'
+                                        : s === 4 ? endLabel
+                                            : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
+                                });
 
-                {/* 5. Mask Mini */}
-                <ViewShot ref={maskMiniChartRef} options={{ format: "jpg", quality: 0.9, result: "base64" }} collapsable={false}>
-                    <View style={styles.hiddenChartView}>
-                        {dates.length > 0 && <LineChart
-                            data={{ labels: dates, datasets: [{ data: reversedLogs.map(l => l.mask_off_count || 0) }] }}
-                            width={360} height={170}
-                            chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(66, 165, 245, ${opacity})` }}
-                            bezier={isBezier}
-                            withInnerLines={true}
-                            withDots={true}
-                        />}
-                    </View>
-                </ViewShot>
-            </View>
+                                const bCol = isCPAP ? '#0284C7' : isAPAP ? '#7C3AED' : '#EA580C';
+                                const bBg = isCPAP ? '#E0F2FE' : isAPAP ? '#F5F3FF' : '#FFF7ED';
+                                const bLab = isCPAP ? 'CPAP' : isAPAP ? 'APAP' : 'MIXED';
+
+                                let cData;
+                                if (isCPAP) {
+                                    const r0 = (parseFloat(log.ramp_start_pressure) || setPres * 0.55);
+                                    cData = { labels: xLabels, datasets: [{ data: [r0, r0 + (setPres - r0) * 0.2, r0 + (setPres - r0) * 0.55, r0 + (setPres - r0) * 0.85, setPres], color: (op = 1) => `rgba(15,70,180,${op})`, strokeWidth: 1.5 }] };
+                                } else if (isAPAP) {
+                                    const yMin = Math.max(0, Math.min(minP, 4) - 1);
+                                    cData = { labels: xLabels, datasets: [{ data: Array(5).fill(maxP), color: (op = 1) => `rgba(185,28,28,${op})`, strokeWidth: 1.5 }, { data: Array(5).fill(minP), color: (op = 1) => `rgba(30,64,175,${op})`, strokeWidth: 1.5 }, { data: Array(5).fill(yMin), color: () => 'transparent', strokeWidth: 0, withDots: false }] };
+                                } else {
+                                    const r0 = (parseFloat(log.ramp_start_pressure) || setPres * 0.55);
+                                    const yAnchor = Math.max(0, Math.min(minP, 4) - 1);
+                                    cData = { labels: xLabels, datasets: [{ data: [r0, r0 + (setPres - r0) * 0.25, r0 + (setPres - r0) * 0.55, r0 + (setPres - r0) * 0.8, setPres], color: (op = 1) => `rgba(15,70,180,${op})`, strokeWidth: 1.5 }, { data: Array(5).fill(maxP), color: (op = 1) => `rgba(185,28,28,${op})`, strokeWidth: 1.5 }, { data: Array(5).fill(minP), color: (op = 1) => `rgba(15,118,110,${op})`, strokeWidth: 1.5 }, { data: Array(5).fill(yAnchor), color: () => 'transparent', strokeWidth: 0, withDots: false }] };
+                                }
+
+                                return (
+                                    <View key={i} style={styles.miniGridCard}>
+                                        <View style={styles.gridCardHeader}>
+                                            <View>
+                                                <Text style={styles.gridDate}>{log.date}</Text>
+                                                <Text style={styles.gridUsage}>Usage: {formatHoursToHHMM(usageH)}</Text>
+                                            </View>
+                                            <View style={[styles.miniBadge, { backgroundColor: bBg, flexDirection: 'row', alignItems: 'center', gap: 2 }]}>
+                                                <Icon name={badgeIcon} size={8} color={bCol} />
+                                                <Text style={[styles.miniBadgeText, { color: bCol }]}>{bLab}</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={[styles.miniAccentStripe, { backgroundColor: stripeColor }]} />
+
+                                        <View style={{ height: 110, paddingLeft: 10 }}>
+                                            <LineChart
+                                                data={cData}
+                                                width={170} height={105}
+                                                chartConfig={{
+                                                    ...chartConfig,
+                                                    backgroundGradientFrom: "#FFF",
+                                                    backgroundGradientTo: "#FFF",
+                                                    decimalPlaces: 1,
+                                                    fillShadowGradientFromOpacity: 0,
+                                                    fillShadowGradientToOpacity: 0,
+                                                    propsForLabels: { fontSize: 7, fontWeight: '600' },
+                                                    propsForBackgroundLines: { stroke: '#f1f5f9' },
+                                                    propsForDots: { r: '2', strokeWidth: '1.5', stroke: '#fff' }
+                                                }}
+                                                withInnerLines={true}
+                                                bezier={!isAPAP}
+                                                withDots={true}
+                                                formatYLabel={(v) => Number(v) > 0 ? Number(v).toFixed(1) : ''}
+                                                style={{ marginVertical: 4, marginLeft: -15 }}
+                                            />
+                                        </View>
+
+                                        <View style={styles.gridLabelsRow}>
+                                            <Text style={styles.gridLabelsText}>cmH₂O</Text>
+                                            <Text style={styles.gridLabelsText}>Time →</Text>
+                                        </View>
+
+                                        <View style={styles.miniPressureSummaryRow}>
+                                            {isCPAP ? (
+                                                <View style={styles.miniPressureSummaryItem}>
+                                                    <Text style={styles.miniPressureSummaryVal}>{setPres.toFixed(1)}</Text>
+                                                    <Text style={styles.miniPressureSummaryLbl}>Set Press</Text>
+                                                </View>
+                                            ) : isAPAP ? (
+                                                <>
+                                                    <View style={styles.miniPressureSummaryItem}>
+                                                        <Text style={[styles.miniPressureSummaryVal, { color: '#1E88E5' }]}>{minP.toFixed(1)}</Text>
+                                                        <Text style={styles.miniPressureSummaryLbl}>Min</Text>
+                                                    </View>
+                                                    <View style={[styles.miniPressureSummaryItem, { borderLeftWidth: 1, borderColor: '#F1F5F9' }]}>
+                                                        <Text style={[styles.miniPressureSummaryVal, { color: '#EF5350' }]}>{maxP.toFixed(1)}</Text>
+                                                        <Text style={styles.miniPressureSummaryLbl}>Max</Text>
+                                                    </View>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <View style={styles.miniPressureSummaryItem}>
+                                                        <Text style={[styles.miniPressureSummaryVal, { color: '#1E88E5' }]}>{setPres.toFixed(1)}</Text>
+                                                        <Text style={styles.miniPressureSummaryLbl}>Set</Text>
+                                                    </View>
+                                                    <View style={[styles.miniPressureSummaryItem, { borderLeftWidth: 1, borderColor: '#F1F5F9' }]}>
+                                                        <Text style={[styles.miniPressureSummaryVal, { color: '#14B8A6' }]}>{minP.toFixed(1)}</Text>
+                                                        <Text style={styles.miniPressureSummaryLbl}>Min</Text>
+                                                    </View>
+                                                    <View style={[styles.miniPressureSummaryItem, { borderLeftWidth: 1, borderColor: '#F1F5F9' }]}>
+                                                        <Text style={[styles.miniPressureSummaryVal, { color: '#EF4444' }]}>{maxP.toFixed(1)}</Text>
+                                                        <Text style={styles.miniPressureSummaryLbl}>Max</Text>
+                                                    </View>
+                                                </>
+                                            )}
+                                        </View>
+
+                                        <View style={styles.gridLegendRow}>
+                                            {!isCPAP && <View style={styles.miniLegendItem}><View style={[styles.miniLegendDot, { backgroundColor: '#EF4444' }]} /><Text style={styles.miniLegendTxt}>Max</Text></View>}
+                                            {!isCPAP && <View style={styles.miniLegendItem}><View style={[styles.miniLegendDot, { backgroundColor: isAPAP ? '#64C8FF' : '#14B8A6' }]} /><Text style={styles.miniLegendTxt}>Min</Text></View>}
+                                            {isCPAP && <View style={styles.miniLegendItem}><View style={[styles.miniLegendDot, { backgroundColor: '#1E88E5' }]} /><Text style={styles.miniLegendTxt}>Set Pressure</Text></View>}
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    </ViewShot>
+
+                    {/* 2. Flow Rate (7 Days) */}
+                    <ViewShot ref={flowChartRef} options={{ format: "png", quality: 0.8, result: "base64" }} collapsable={false}>
+                        <View style={styles.hiddenChartView}>
+                            {dates7.length > 0 && <LineChart
+                                data={{ labels: dates7, datasets: [{ data: reversedLogs7.map(l => l.avg_flow || 0) }] }}
+                                width={360} height={180}
+                                chartConfig={{ ...flowChartConfig, strokeWidth: 1, fillShadowGradientFromOpacity: 0, fillShadowGradientToOpacity: 0 }}
+                                formatYLabel={(v) => Number(v).toFixed(2)}
+                                bezier={reversedLogs7.length > 1}
+                                withInnerLines={true}
+                            />}
+                        </View>
+                    </ViewShot>
+
+                    {/* 3. AHI Mini (7 Days) */}
+                    <ViewShot ref={ahiMiniChartRef} options={{ format: "png", quality: 0.8, result: "base64" }} collapsable={false}>
+                        <View style={styles.hiddenChartView}>
+                            {dates7.length > 0 && <LineChart
+                                data={{ labels: dates7, datasets: [{ data: reversedLogs7.map(l => l.ahi || 0) }] }}
+                                width={360} height={170}
+                                chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(239, 83, 80, ${opacity})` }}
+                                bezier={reversedLogs7.length > 1}
+                                withInnerLines={true}
+                                withDots={true}
+                            />}
+                        </View>
+                    </ViewShot>
+
+                    <ViewShot ref={leakMiniChartRef} options={{ format: "png", quality: 0.8, result: "base64" }} collapsable={false}>
+                        <View style={styles.hiddenChartView}>
+                            {dates7.length > 0 && <LineChart
+                                data={{ labels: dates7, datasets: [{ data: reversedLogs7.map(l => l.leak_rate || 0) }] }}
+                                width={360} height={170}
+                                chartConfig={{ ...chartConfig, color: (opacity = 1) => `rgba(255, 167, 38, ${opacity})` }}
+                                bezier={reversedLogs7.length > 1}
+                                withInnerLines={true}
+                                withDots={true}
+                            />}
+                        </View>
+                    </ViewShot>
+                </View>
+            )}
 
             <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
             <View style={styles.header}>
@@ -616,7 +819,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.previewCard}>
                     <View style={styles.pdfIcon}>
-                        <Icon name="file-pdf-box" size={80} color={Colors.primary} />
+                        <Icon name="file-pdf-box" size={60} color={Colors.primary} />
                     </View>
                     <Text style={styles.previewTitle}>Download Your Clinical Data</Text>
                     <Text style={styles.previewSub}>
@@ -676,7 +879,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: Spacing.xl,
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
-        paddingBottom: 14,
+        paddingBottom: 20,
         backgroundColor: Colors.primary,
     },
     headerTitle: {
@@ -701,8 +904,8 @@ const styles = StyleSheet.create({
     },
     pdfIcon: {
         backgroundColor: '#FFF',
-        width: 140,
-        height: 180,
+        width: 110,
+        height: 80,
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
@@ -783,14 +986,115 @@ const styles = StyleSheet.create({
     dashboardSection: {
         marginTop: 20,
     },
-    sectionHeading: {
-        fontSize: 12,
+    gridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        width: 630,
+        backgroundColor: '#FFFFFF',
+        padding: 15,
+        justifyContent: 'space-between',
+    },
+    miniGridCard: {
+        width: 195,
+        marginBottom: 12,
+        padding: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    gridCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        paddingBottom: 4,
+    },
+    gridDate: {
+        fontSize: 8,
         fontWeight: 'bold',
-        color: '#64748B',
-        letterSpacing: 1.5,
-        textTransform: 'uppercase',
-        marginBottom: 15,
-        paddingLeft: 4,
+        color: '#1E293B',
+    },
+    gridUsage: {
+        fontSize: 7,
+        color: '#94A3B8',
+        fontWeight: '600',
+    },
+    miniBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 6,
+    },
+    miniBadgeText: {
+        fontSize: 7,
+        fontWeight: 'bold',
+    },
+    gridLabelsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 4,
+        marginTop: -5,
+    },
+    gridLabelsText: {
+        fontSize: 6,
+        color: '#94A3B8',
+        fontWeight: 'bold',
+    },
+    gridLegendRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 6,
+        paddingTop: 4,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    miniLegendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+    },
+    miniLegendDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 2.5,
+    },
+    miniLegendTxt: {
+        fontSize: 6,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    miniAccentStripe: {
+        height: 3,
+        borderRadius: 3,
+        marginBottom: 6,
+        marginHorizontal: -10,
+    },
+    miniPressureSummaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginTop: 6,
+        paddingTop: 6,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    miniPressureSummaryItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    miniPressureSummaryVal: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: Colors.primary,
+    },
+    miniPressureSummaryLbl: {
+        fontSize: 5,
+        color: '#94A3B8',
+        textAlign: 'center',
+        fontWeight: '600',
+        marginTop: 1,
     },
     graphCard: {
         backgroundColor: '#FFFFFF',

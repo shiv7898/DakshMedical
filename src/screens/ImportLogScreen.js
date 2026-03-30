@@ -32,13 +32,21 @@ const ImportLogScreen = ({ route, navigation }) => {
 
     const handlePickFile = async () => {
         try {
+            // Small delay to ensure the activity is fully ready and focused
+            // This prevents "Current activity is null" errors on some Android versions
+            if (Platform.OS === 'android') {
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+
             const res = await DocumentPicker.pick({
-                type: [DocumentPicker.types.allFiles, 'text/csv', 'application/vnd.ms-excel'],
+                // Using only csv and all files for maximum compatibility
+                type: [DocumentPicker.types.allFiles, 'text/csv'],
                 copyTo: 'cachesDirectory',
             });
 
-            console.log('Picked File:', res[0]);
+            if (!res || res.length === 0) return;
 
+            console.log('Picked File:', res[0]);
             setLoading(true);
             const pickedFile = res[0];
             let readablePath = pickedFile.fileCopyUri || pickedFile.uri;
@@ -49,32 +57,18 @@ const ImportLogScreen = ({ route, navigation }) => {
 
             const fileContent = await RNFS.readFile(readablePath, 'utf8');
             const parsedData = await parseCSV(fileContent);
-            console.log('Parsed Data:', parsedData);
+            console.log('Parsed Data Count:', parsedData?.length);
 
             if (!parsedData || parsedData.length === 0 || parsedData[0] === null) {
                 throw new Error('No clinical therapy data found in the file.');
             }
 
-            // Save to database
-            // for (const item of parsedData) {
-            //     if (item) {
-            //         console.log('Attempting DB Insert for:', item.date);
-            //         await insertLog({
-            //             ...item,
-            //             machine_type: machineType,
-            //             patient_id: 1,
-            //         });
-            //         console.log('DB Insert Success for:', item.date);
-            //     }
-            // }
-            // Prepare formatted data
             const formattedData = parsedData.map(item => ({
                 ...item,
                 machine_type: machineType,
                 patient_id: 1,
             }));
 
-            // 🔥 Drop + Recreate + Insert in single transaction
             await recreateLogsTableWithData(formattedData);
 
             setLoading(false);
@@ -87,32 +81,40 @@ const ImportLogScreen = ({ route, navigation }) => {
             Alert.alert(
                 summaryTitle,
                 summaryMsg,
-                [
-                    // { text: 'View Report', onPress: () => navigation.navigate('Reports') },
-                    { text: 'Dashboard', onPress: () => navigation.navigate('MainTabs') }
-                ]
+                [{ text: 'Dashboard', onPress: () => navigation.navigate('MainTabs') }]
             );
         } catch (err) {
             setLoading(false);
-            
-            // Check for user cancellation in multiple ways
-            const isCancelError = 
-                (DocumentPicker.isCancel && DocumentPicker.isCancel(err)) ||
-                err?.code === 'DOCUMENT_PICKER_CANCELED' ||
-                err?.message?.toLowerCase()?.includes('cancel') ||
-                err?.message?.toLowerCase()?.includes('user canceled');
 
-            if (isCancelError) {
-                console.log('User cancelled file picker');
-                return; // Simply return, no error shown
+            // Correct way to check for cancellation in @react-native-documents/picker
+            const isCancel =
+                (DocumentPicker.isErrorWithCode(err) && err.code === DocumentPicker.errorCodes.OPERATION_CANCELED) ||
+                err?.code === 'OPERATION_CANCELED' ||
+                err?.code === 'DOCUMENT_PICKER_CANCELED' ||
+                err?.message?.includes('cancel');
+
+            if (isCancel) {
+                console.log('File picker cancelled by user');
+                return;
             }
-            
+
             console.error('CRITICAL IMPORT ERROR:', err);
-            const errorMsg = err?.message || (typeof err === 'string' ? err : 'Internal Data Error');
+            const errorMsg = err?.message || (typeof err === 'string' ? err : 'Internal Access Error');
+
+            // Specific handling for "Activity is null" - often a race condition
+            // In this library, it might appear as NULL_PRESENTER
+            if (errorMsg.includes('activity is null') || err?.code === 'NULL_PRESENTER' || err?.code === DocumentPicker.errorCodes.NULL_PRESENTER) {
+                Alert.alert(
+                    'Picker Busy',
+                    'The system file picker is currently busy. Please wait a moment and click "Select File" again.',
+                    [{ text: 'Retry', onPress: () => setTimeout(handlePickFile, 500) }, { text: 'OK' }]
+                );
+                return;
+            }
 
             Alert.alert(
                 'Import Failed',
-                `Database Error: ${errorMsg}\n\nTry clicking "Setup Database" in settings if the problem persists.`,
+                `Database Error: ${errorMsg}\n\nPlease ensure your SD card or file is accessible.`,
                 [{ text: 'OK' }]
             );
         }
@@ -221,12 +223,12 @@ const styles = StyleSheet.create({
         width: SCREEN_WIDTH * 0.35,
         height: SCREEN_WIDTH * 0.35,
         borderRadius: (SCREEN_WIDTH * 0.35) / 2,
-        backgroundColor: '#F8FBFF',
+        backgroundColor: Colors.surface, // Green tint
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: Spacing.xl,
         borderWidth: 2,
-        borderColor: '#E1E9F5',
+        borderColor: Colors.border,
         borderStyle: 'dashed',
     },
     title: {
@@ -264,12 +266,12 @@ const styles = StyleSheet.create({
     },
     infoCard: {
         flexDirection: 'row',
-        backgroundColor: '#F8FBFF',
+        backgroundColor: Colors.surface,
         padding: Spacing.m,
         borderRadius: 12,
         marginTop: 40,
         borderWidth: 1,
-        borderColor: '#E8F0F8',
+        borderColor: Colors.border,
         width: '100%',
     },
     infoTitle: {

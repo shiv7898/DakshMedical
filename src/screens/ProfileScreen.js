@@ -19,18 +19,19 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Spacing, Typography } from '../styles/theme';
-import { getPatientInfo, savePatientInfo, clearPatientInfo } from '../api/database';
+import { getPatientInfo, savePatientInfo, clearPatientInfo, clearLogs } from '../api/database';
+import { useData } from '../context/DataContext';
 
 // ─── Colours & tokens ────────────────────────────────────────────────────────
-const PRIMARY = '#1565C0';
-const PRIMARY_LIGHT = '#1E88E5';
-const PRIMARY_BG = '#EFF6FF';
-const BORDER = '#DBEAFE';
-const TEXT = '#1E293B';
-const TEXT_SEC = '#607D8B';
+const PRIMARY = Colors.primary;
+const PRIMARY_LIGHT = Colors.accent;
+const PRIMARY_BG = Colors.surface;
+const BORDER = Colors.border;
+const TEXT = Colors.text;
+const TEXT_SEC = Colors.textSecondary;
 const CARD_BG = '#FFFFFF';
-const INPUT_BG = '#F8FAFF';
-const ERROR = '#EF4444';
+const INPUT_BG = Colors.surface;
+const ERROR = Colors.error;
 
 // ─── Single field row ─────────────────────────────────────────────────────────
 const FieldRow = ({
@@ -156,6 +157,7 @@ const scStyles = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const ProfileScreen = ({ navigation, route }) => {
+    const { setSelectedRange } = useData();
     const isSetup = route?.params?.isSetup || false;
     const [isEditing, setIsEditing] = useState(isSetup);
     const [loading, setLoading] = useState(true);
@@ -291,9 +293,12 @@ const ProfileScreen = ({ navigation, route }) => {
                     text: 'Logout', style: 'destructive',
                     onPress: async () => {
                         try {
+                            setSelectedRange(7);
                             await clearPatientInfo();
+                            await clearLogs();
                             navigation.replace('Login');
                         } catch (e) {
+                            setSelectedRange(7);
                             navigation.replace('Login');
                         }
                     }

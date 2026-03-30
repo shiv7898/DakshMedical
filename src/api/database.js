@@ -39,6 +39,9 @@ export const setupDatabase = () => {
         pressure_min REAL DEFAULT 0,
         pressure_max REAL DEFAULT 0,
         pressure_avg REAL DEFAULT 0,
+        ramp_start_pressure REAL DEFAULT 0,
+        pressure_off INTEGER DEFAULT 0,
+        ramp_duration INTEGER DEFAULT 0,
         avg_flow REAL DEFAULT 0,
         leak_rate REAL DEFAULT 0,
         large_leak_percent REAL DEFAULT 0,
@@ -52,6 +55,7 @@ export const setupDatabase = () => {
         hypopnea_count INTEGER DEFAULT 0,
         mask_fault_count INTEGER DEFAULT 0,
         mask_off_count INTEGER DEFAULT 0,
+        low_pressure_count INTEGER DEFAULT 0,
         compliance_percent REAL DEFAULT 0,
         machine_type TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -133,6 +137,9 @@ export const recreateLogsTableWithData = (logsArray) => {
           pressure_min REAL DEFAULT 0,
           pressure_max REAL DEFAULT 0,
           pressure_avg REAL DEFAULT 0,
+          ramp_start_pressure REAL DEFAULT 0,
+          pressure_off INTEGER DEFAULT 0,
+          ramp_duration INTEGER DEFAULT 0,
           avg_flow REAL DEFAULT 0,
           leak_rate REAL DEFAULT 0,
           large_leak_percent REAL DEFAULT 0,
@@ -146,6 +153,7 @@ export const recreateLogsTableWithData = (logsArray) => {
           hypopnea_count INTEGER DEFAULT 0,
           mask_fault_count INTEGER DEFAULT 0,
           mask_off_count INTEGER DEFAULT 0,
+          low_pressure_count INTEGER DEFAULT 0,
           compliance_percent REAL DEFAULT 0,
           machine_type TEXT,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -159,11 +167,11 @@ export const recreateLogsTableWithData = (logsArray) => {
         tx.executeSql(
           `INSERT INTO logs
           (patient_id, date, usage_hours, therapy_type, avg_set_pressure,
-           pressure_min, pressure_max, pressure_avg,
+           pressure_min, pressure_max, pressure_avg, ramp_start_pressure, pressure_off, ramp_duration,
            avg_flow, leak_rate, large_leak_percent, avg_resp_rate,
            ahi, cai, oai, apnea_count, obstructive_count, central_count,
-           hypopnea_count, mask_fault_count, mask_off_count, compliance_percent, machine_type)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           hypopnea_count, mask_fault_count, mask_off_count, low_pressure_count, compliance_percent, machine_type)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             logData.patient_id ?? 1,
             logData.date,
@@ -173,6 +181,9 @@ export const recreateLogsTableWithData = (logsArray) => {
             logData.pressure_min ?? 0,
             logData.pressure_max ?? 0,
             logData.pressure_avg ?? 0,
+            logData.ramp_start_pressure ?? 0,
+            logData.pressure_off ?? 0,
+            logData.ramp_duration ?? 0,
             logData.avg_flow ?? 0,
             logData.leak_rate ?? 0,
             logData.large_leak_percent ?? 0,
@@ -186,6 +197,7 @@ export const recreateLogsTableWithData = (logsArray) => {
             logData.hypopnea_count ?? 0,
             logData.mask_fault_count ?? 0,
             logData.mask_off_count ?? 0,
+            logData.low_pressure_count ?? 0,
             logData.compliance_percent ?? 0,
             logData.machine_type ?? 'CPAP',
           ]
@@ -303,9 +315,9 @@ export const savePatientInfo = (patientData) => {
               (_tx, err) => {
                 console.error("SQL UPDATE Error:", err);
                 // Try ALTER TABLE to add missing columns (for existing DBs)
-                tx.executeSql('ALTER TABLE patients ADD COLUMN patient_custom_id TEXT', [], () => {}, () => {});
-                tx.executeSql('ALTER TABLE patients ADD COLUMN doctor_name TEXT', [], () => {}, () => {});
-                tx.executeSql('ALTER TABLE patients ADD COLUMN doctor_phone TEXT', [], () => {}, () => {});
+                tx.executeSql('ALTER TABLE patients ADD COLUMN patient_custom_id TEXT', [], () => { }, () => { });
+                tx.executeSql('ALTER TABLE patients ADD COLUMN doctor_name TEXT', [], () => { }, () => { });
+                tx.executeSql('ALTER TABLE patients ADD COLUMN doctor_phone TEXT', [], () => { }, () => { });
                 reject(err || new Error("SQL UPDATE Error"));
                 return true;
               }
@@ -342,6 +354,14 @@ export const clearPatientInfo = () => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
       tx.executeSql('DELETE FROM patients', [], (_, res) => resolve(res), (_, err) => reject(err));
+    });
+  });
+};
+
+export const clearLogs = () => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql('DELETE FROM logs', [], (_, res) => resolve(res), (_, err) => reject(err));
     });
   });
 };
