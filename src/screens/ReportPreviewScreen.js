@@ -12,6 +12,7 @@ import {
     StatusBar,
     Dimensions,
     Linking,
+    PermissionsAndroid
 } from 'react-native';
 import { Colors, Spacing, Typography } from '../styles/theme';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -21,10 +22,30 @@ import ViewShot from 'react-native-view-shot';
 import Share from 'react-native-share';
 import { LineChart, BarChart, StackedBarChart } from 'react-native-chart-kit';
 import RNFS from 'react-native-fs';
+// import notifee, { AndroidImportance, AndroidStyle, EventType } from '@notifee/react-native';
 import { getLogs, getPatientInfo } from '../api/database';
 import { useData } from '../context/DataContext';
 
+
 const { width } = Dimensions.get('window');
+
+// 🔔 Background event handler for notification tap (must be at module level)
+// notifee.onBackgroundEvent(async ({ type, detail }) => {
+//     if (type === EventType.PRESS) {
+//         const filePath = detail.notification?.data?.filePath;
+//         if (filePath) {
+//             try {
+//                 await Share.open({
+//                     url: filePath.startsWith('file://') ? filePath : 'file://' + filePath,
+//                     type: 'application/pdf',
+//                     title: 'Open Airsine Report',
+//                 });
+//             } catch (err) {
+//                 console.log('Background notification open PDF error:', err);
+//             }
+//         }
+//     }
+// });
 
 const ReportPreviewScreen = () => {
     const [logs, setLogs] = useState([]);
@@ -37,6 +58,23 @@ const ReportPreviewScreen = () => {
     const flowChartRef = useRef(null);
     const ahiMiniChartRef = useRef(null);
     const leakMiniChartRef = useRef(null);
+
+    // 🔔 Foreground event handler — open PDF when notification is tapped while app is open
+    // useEffect(() => {
+    //     const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+    //         if (type === EventType.PRESS) {
+    //             const filePath = detail.notification?.data?.filePath;
+    //             if (filePath) {
+    //                 Share.open({
+    //                     url: filePath.startsWith('file://') ? filePath : 'file://' + filePath,
+    //                     type: 'application/pdf',
+    //                     title: 'Open Airsine Report',
+    //                 }).catch(err => console.log('Foreground notification open PDF error:', err));
+    //             }
+    //         }
+    //     });
+    //     return () => unsubscribe();
+    // }, []);
 
     const fetchData = React.useCallback(async () => {
         try {
@@ -107,6 +145,70 @@ const ReportPreviewScreen = () => {
         return '';
     };
 
+
+    // const requestNotificationPermission = async () => {
+    //     if (Platform.OS === 'android' && Platform.Version >= 33) {
+    //         const granted = await PermissionsAndroid.request(
+    //             PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+    //         );
+
+    //         return granted === PermissionsAndroid.RESULTS.GRANTED;
+    //     }
+    //     return true;
+    // };
+    // 🔔 Modern native notification for PDF download
+    // const showDownloadNotification = async (fileName, filePath) => {
+    //     try {
+    //         const hasPermission = await requestNotificationPermission();
+    //         if (!hasPermission) {
+    //             console.warn('Notification permission denied');
+    //             return;
+    //         }
+    //         // Create a notification channel (required for Android 8+)
+    //         const channelId = await notifee.createChannel({
+    //             id: 'pdf_downloads',
+    //             name: 'PDF Downloads',
+    //             description: 'Notifications for downloaded PDF reports',
+    //             importance: AndroidImportance.HIGH,
+    //             sound: 'default',
+    //             vibration: true,
+    //         });
+
+    //         // Display the notification with filePath in data for tap-to-open
+    //         await notifee.displayNotification({
+    //             title: '✅ Report Downloaded Successfully',
+    //             body: `📄 ${fileName}\nSaved to Downloads folder. Tap to open.`,
+    //             data: {
+    //                 filePath: filePath,
+    //             },
+    //             android: {
+    //                 channelId,
+    //                 smallIcon: 'ic_launcher',
+    //                 importance: AndroidImportance.HIGH,
+    //                 pressAction: {
+    //                     id: 'open_pdf',
+    //                     launchActivity: 'default',
+    //                 },
+    //                 style: {
+    //                     type: AndroidStyle.BIGTEXT,
+    //                     text: `📄 ${fileName}\n\nYour Airsine therapy report has been downloaded and saved to the Downloads folder. Tap this notification to open or share the PDF.`,
+    //                 },
+    //                 timestamp: Date.now(),
+    //                 showTimestamp: true,
+    //                 autoCancel: true,
+    //             },
+    //             ios: {
+    //                 sound: 'default',
+    //             },
+    //         });
+
+    //         console.log('✅ Download notification shown for:', fileName);
+    //     } catch (notifError) {
+    //         console.log('Notification error (non-critical):', notifError);
+    //         // Non-critical — PDF is already saved, notification is just a bonus
+    //     }
+    // };
+
     const handleGeneratePDF = async () => {
         if (!logs || logs.length === 0 || (logs.length === 1 && logs[0].id === 9999)) {
             Alert.alert('No Clinical Data', 'Please import therapy logs from the machine selection screen first.');
@@ -116,7 +218,7 @@ const ReportPreviewScreen = () => {
         setGenerating(true);
         try {
             // Small delay to ensure charts are fully rendered in their hidden container before capture
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             // Capture each graph separately
             const pressureGridImg = await captureChart(pressureGridRef);
@@ -537,6 +639,9 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 
                 await RNFS.copyFile(results.filePath, downloadPath);
 
+                // 🔔 Show native notification in notification tray
+                // await showDownloadNotification(fileName, downloadPath);
+
                 Alert.alert(
                     '✅ Report Downloaded!',
                     `PDF saved to Downloads folder:\n${fileName}`,
@@ -561,6 +666,10 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                 );
             } catch (copyErr) {
                 console.log('Copy to Downloads failed, opening internal path:', copyErr);
+
+                // 🔔 Still show notification for fallback path
+                // await showDownloadNotification(fileName, results.filePath);
+
                 Alert.alert(
                     '✅ Report Generated!',
                     `Saved to app storage. Click open to view.`,
