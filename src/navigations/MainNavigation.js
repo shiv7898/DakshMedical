@@ -13,6 +13,7 @@ import GraphScreen from '../screens/GraphScreen';
 import ReportPreviewScreen from '../screens/ReportPreviewScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import SplashScreen from '../screens/SplaceScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -91,6 +92,7 @@ const MainTabs = () => {
 const MainNavigation = () => {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Splash" component={SplashScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="ProfileSetup" component={ProfileScreen} />
             <Stack.Screen name="MainTabs" component={MainTabs} />

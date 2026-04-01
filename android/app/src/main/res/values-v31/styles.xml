@@ -1,0 +1,10 @@
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Main background for the app before React Native loads -->
+        <item name="android:windowBackground">@color/splash_background</item>
+
+        <!-- Hide the default Android 12+ splash logo by making it the same as the background -->
+        <item name="android:windowSplashScreenAnimatedIcon">@color/splash_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+    </style>
+</resources>
