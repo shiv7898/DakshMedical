@@ -8,7 +8,6 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
-    Dimensions,
     ScrollView,
     SafeAreaView,
     StatusBar,
@@ -18,9 +17,8 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { Colors } from '../styles/theme';
-import { User, Lock, ArrowRight, ShieldCheck, Activity } from 'lucide-react-native';
+import { User, Lock, ArrowRight, ShieldCheck } from 'lucide-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const LoginScreen = ({ navigation }) => {
@@ -30,9 +28,6 @@ const LoginScreen = ({ navigation }) => {
     const [password, setPassword] = useState('');
     const [focusField, setFocusField] = useState(null);
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
-
-    // Calculate the usable height excluding system bars
-    const AVAILABLE_HEIGHT = SCREEN_HEIGHT - insets.top - insets.bottom;
 
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -85,22 +80,6 @@ const LoginScreen = ({ navigation }) => {
             })
         ]).start();
 
-        // Logo Floating Animation
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(logoFloat, {
-                    toValue: 1,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(logoFloat, {
-                    toValue: 0,
-                    duration: 2000,
-                    useNativeDriver: true,
-                })
-            ])
-        ).start();
-
         // Glow Pulsing Animation
         Animated.loop(
             Animated.sequence([
@@ -117,17 +96,11 @@ const LoginScreen = ({ navigation }) => {
             ])
         ).start();
 
-        const keyboardDidShowListener = Keyboard.addListener(
-            'keyboardDidShow',
-            () => setKeyboardVisible(true)
-        );
-        const keyboardDidHideListener = Keyboard.addListener(
-            'keyboardDidHide',
-            () => {
-                setKeyboardVisible(false);
-                scrollRef.current?.scrollTo({ y: 0, animated: true });
-            }
-        );
+        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+            setKeyboardVisible(false);
+            scrollRef.current?.scrollTo({ y: 0, animated: true });
+        });
 
         return () => {
             keyboardDidHideListener.remove();
@@ -141,8 +114,7 @@ const LoginScreen = ({ navigation }) => {
             return;
         }
 
-        // Mock login - simplified as per existing logic
-        if (username.toLowerCase() === 'a' && password === 'a') {
+        if (username.toLowerCase() === 'doctor@gmail.com' && password === 'Doctor123') {
             navigation.replace('ProfileSetup', { isSetup: true });
         } else {
             Alert.alert('Access Denied', 'Please check your monitoring credentials and try again.');
@@ -177,15 +149,7 @@ const LoginScreen = ({ navigation }) => {
                         keyboardShouldPersistTaps="handled"
                         bounces={false}
                     >
-                        <Animated.View
-                            style={[
-                                styles.header,
-                                {
-                                    opacity: fadeAnim,
-                                    transform: [{ translateY: slideAnim }]
-                                }
-                            ]}
-                        >
+                        <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
                             <View style={styles.logoContainer}>
                                 <Animated.View style={[
                                     styles.glowEffect,
@@ -194,25 +158,13 @@ const LoginScreen = ({ navigation }) => {
                                         opacity: glowPulse.interpolate({ inputRange: [1, 1.2], outputRange: [0.15, 0.05] })
                                     }
                                 ]} />
-                                <Animated.View style={{
-                                    transform: [
-                                        // { scale: logoScale },
-                                        // {
-                                        //     translateY: logoFloat.interpolate({
-                                        //         inputRange: [0, 1],
-                                        //         outputRange: [0, -8]
-                                        //     })
-                                        // }
-                                    ]
-                                }}>
-                                    <View style={styles.logoCircle}>
-                                        <Image
-                                            source={require('../assets/img/logo1.png')}
-                                            style={styles.logoImage}
-                                            resizeMode="contain"
-                                        />
-                                    </View>
-                                </Animated.View>
+                                <View style={styles.logoCircle}>
+                                    <Image
+                                        source={require('../assets/img/logo1.png')}
+                                        style={styles.logoImage}
+                                        resizeMode="contain"
+                                    />
+                                </View>
                             </View>
                             <Animated.Text style={[
                                 styles.brandName,
@@ -224,18 +176,7 @@ const LoginScreen = ({ navigation }) => {
                             <Animated.Text style={[styles.brandTagline, { opacity: titleFade }]}>VITAL MONITORING SYSTEMS</Animated.Text>
                         </Animated.View>
 
-                        <Animated.View
-                            style={[
-                                styles.content,
-                                {
-                                    opacity: fadeAnim,
-                                    transform: [
-                                        { translateY: slideAnim },
-                                        { scale: cardScale }
-                                    ]
-                                }
-                            ]}
-                        >
+                        <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: cardScale }] }]}>
                             <View style={styles.card}>
                                 <View style={styles.cardHeader}>
                                     <ShieldCheck size={20} color={Colors.primary} />
@@ -245,10 +186,7 @@ const LoginScreen = ({ navigation }) => {
                                 <Text style={styles.cardSubtitle}>Enter your secure credentials to access patient dashboards</Text>
 
                                 <View style={styles.form}>
-                                    <View style={[
-                                        styles.inputContainer,
-                                        focusField === 'user' && styles.inputFocused
-                                    ]}>
+                                    <View style={[styles.inputContainer, focusField === 'user' && styles.inputFocused]}>
                                         <View style={styles.inputIcon}>
                                             <User size={20} color={focusField === 'user' ? Colors.primary : '#94A3B8'} />
                                         </View>
@@ -264,10 +202,7 @@ const LoginScreen = ({ navigation }) => {
                                         />
                                     </View>
 
-                                    <View style={[
-                                        styles.inputContainer,
-                                        focusField === 'pass' && styles.inputFocused
-                                    ]}>
+                                    <View style={[styles.inputContainer, focusField === 'pass' && styles.inputFocused]}>
                                         <View style={styles.inputIcon}>
                                             <Lock size={20} color={focusField === 'pass' ? Colors.primary : '#94A3B8'} />
                                         </View>
@@ -284,10 +219,14 @@ const LoginScreen = ({ navigation }) => {
                                     </View>
 
                                     <TouchableOpacity
-                                        style={styles.loginButton}
-                                        onPress={handleLogin}
-                                        activeOpacity={0.8}
+                                        style={styles.forgotPassBtn}
+                                        onPress={() => navigation.navigate('ForgotPassword')}
                                     >
+
+                                        <Text style={styles.forgotPassText}>Forgot Password?</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8}>
                                         <Text style={styles.loginButtonText}>AUTHENTICATE</Text>
                                         <View style={styles.buttonIcon}>
                                             <ArrowRight size={18} color="#FFF" />
@@ -295,25 +234,22 @@ const LoginScreen = ({ navigation }) => {
                                     </TouchableOpacity>
                                 </View>
 
-                                <View style={styles.divider}>
+                                {/* <View style={styles.divider}>
                                     <View style={styles.line} />
                                     <Text style={styles.dividerText}>SECURE TERMINAL</Text>
                                     <View style={styles.line} />
-                                </View>
-
-                                {/* <View style={styles.infoRow}>
-                                    <Icon name="information-variant" size={16} color="#64748B" />
-                                    <Text style={styles.infoText}>Authorized medical personnel only</Text>
                                 </View> */}
+
+                                <TouchableOpacity
+                                    style={styles.createUserBtn}
+                                    onPress={() => navigation.navigate('CreateUser')}
+                                >
+                                    <Text style={styles.createUserText}>New to Airsine? <Text style={styles.linkText}>Create User</Text></Text>
+                                </TouchableOpacity>
                             </View>
                         </Animated.View>
 
-                        <Animated.View
-                            style={[
-                                styles.footer,
-                                { opacity: fadeAnim }
-                            ]}
-                        >
+                        <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
                             <Text style={styles.footerText}>© 2026 AIRSINE MEDICAL TECHNOLOGY</Text>
                             <Text style={styles.versionText}>ENCRYPTED LINK • V1.0.5</Text>
                         </Animated.View>
@@ -327,8 +263,7 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.secondary, // Deep Medical Green
-        textAlign: 'center',
+        backgroundColor: Colors.secondary,
     },
     bgCircle: {
         position: 'absolute',
@@ -337,24 +272,18 @@ const styles = StyleSheet.create({
     circle1: {
         top: -170,
         right: -100,
-        width: 100,
-        height: 100,
         backgroundColor: Colors.primary,
         opacity: 0.14,
     },
     circle2: {
         bottom: -60,
         left: -60,
-        width: 350,
-        height: 350,
         backgroundColor: Colors.primary,
         opacity: 0.08,
     },
     circle3: {
         top: '30%',
         left: -50,
-        width: 200,
-        height: 200,
         backgroundColor: Colors.accent,
         opacity: 0.05,
     },
@@ -364,10 +293,8 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     header: {
-
         alignItems: 'center',
         marginBottom: 10,
-        // marginTop: 10,
     },
     logoContainer: {
         width: 100,
@@ -387,10 +314,6 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: 'rgba(255,255,255,0.3)',
         elevation: 4,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
     },
     logoImage: {
         width: 80,
@@ -410,9 +333,6 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         letterSpacing: 6,
         textAlign: 'center',
-        textShadowColor: 'rgba(16, 185, 129, 0.3)',
-        textShadowOffset: { width: 0, height: 4 },
-        textShadowRadius: 10,
     },
     brandTagline: {
         fontSize: 10,
@@ -431,10 +351,6 @@ const styles = StyleSheet.create({
         borderRadius: 32,
         padding: 30,
         elevation: 20,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 15 },
-        shadowOpacity: 0.15,
-        shadowRadius: 25,
         borderWidth: 1.5,
         borderColor: 'rgba(255, 255, 255, 0.6)',
     },
@@ -449,13 +365,12 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#345e4dff',
         marginLeft: 8,
-        textAlign: 'center',
     },
     cardSubtitle: {
         fontSize: 12,
         color: '#64748B',
         lineHeight: 18,
-        marginBottom: 24,
+        marginBottom: 10,
         textAlign: 'center',
     },
     form: {
@@ -488,6 +403,15 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#0F172A',
     },
+    forgotPassBtn: {
+        alignSelf: 'flex-end',
+        marginTop: -2,
+    },
+    forgotPassText: {
+        color: Colors.primary,
+        fontSize: 12,
+        fontWeight: '700',
+    },
     loginButton: {
         backgroundColor: Colors.primary,
         height: 52,
@@ -497,10 +421,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 10,
         elevation: 6,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
     },
     loginButtonText: {
         color: '#FFFFFF',
@@ -528,21 +448,23 @@ const styles = StyleSheet.create({
         color: '#94A3B8',
         letterSpacing: 1.5,
     },
-    infoRow: {
-        flexDirection: 'row',
+    createUserBtn: {
         alignItems: 'center',
-        justifyContent: 'center',
+        marginTop: 5,
     },
-    infoText: {
-        fontSize: 12,
+    createUserText: {
+        fontSize: 13,
         color: '#64748B',
-        marginLeft: 6,
-        fontWeight: '500',
+        fontWeight: '600',
+    },
+    linkText: {
+        color: Colors.primary,
+        fontWeight: '800',
     },
     footer: {
         alignItems: 'center',
-        marginTop: 25,
-        paddingBottom: 20,
+        marginTop: 15,
+        paddingBottom: 30,
     },
     footerText: {
         fontSize: 10,

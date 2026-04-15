@@ -189,7 +189,7 @@ const DashboardScreen = ({ navigation }) => {
                         height: 45,
                         marginRight: 15,
                         borderRadius: 22.5,
-                        backgroundColor: '#FFF',
+                        backgroundColor: '#f5f5f5ff',
                         justifyContent: 'center',
                         alignItems: 'center',
                         elevation: 2, // Slight depth
@@ -210,10 +210,14 @@ const DashboardScreen = ({ navigation }) => {
                     </View>
                 </View>
                 <TouchableOpacity
-                    style={styles.profileBtn}
-                    onPress={() => navigation.navigate('Reports')}
+                    style={[styles.profileBtn, { zIndex: 999 }]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                        console.log('Opening Machine Settings...');
+                        navigation.navigate('UpdateMachineSetting');
+                    }}
                 >
-                    <Icon name="file-chart-outline" size={24} color="#FFF" />
+                    <Icon name="cog" size={24} color="#FFF" />
                 </TouchableOpacity>
             </View>
 
@@ -674,7 +678,7 @@ const styles = StyleSheet.create({
     },
     cardBgTexture: {
         ...StyleSheet.absoluteFillObject,
-        opacity: 0.35,
+        opacity: 0.10,
         tintColor: '#94A3B8',
     },
     trendBadge: {

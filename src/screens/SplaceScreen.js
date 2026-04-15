@@ -1,207 +1,3 @@
-// import React, { useEffect, useRef } from 'react';
-// import {
-//     View,
-//     Text,
-//     StyleSheet,
-//     Animated,
-//     Image,
-//     StatusBar,
-// } from 'react-native';
-
-// const TEXT = "AIRSINE";
-
-// const SplashScreen = ({ navigation }) => {
-//     const letters = TEXT.split('');
-
-//     const opacityAnim = useRef(letters.map(() => new Animated.Value(0))).current;
-//     const translateAnim = useRef(letters.map(() => new Animated.Value(15))).current;
-
-//     const logoScale = useRef(new Animated.Value(0.7)).current;
-//     const logoFade = useRef(new Animated.Value(0)).current;
-//     const glow = useRef(new Animated.Value(1)).current;
-
-//     useEffect(() => {
-//         // Logo entry
-//         Animated.parallel([
-//             Animated.spring(logoScale, {
-//                 toValue: 1,
-//                 friction: 6,
-//                 useNativeDriver: true,
-//             }),
-//             Animated.timing(logoFade, {
-//                 toValue: 1,
-//                 duration: 600,
-//                 useNativeDriver: true,
-//             }),
-//         ]).start();
-
-//         // Glow pulse
-//         Animated.loop(
-//             Animated.sequence([
-//                 Animated.timing(glow, {
-//                     toValue: 1.2,
-//                     duration: 1000,
-//                     useNativeDriver: true,
-//                 }),
-//                 Animated.timing(glow, {
-//                     toValue: 1,
-//                     duration: 1000,
-//                     useNativeDriver: true,
-//                 }),
-//             ])
-//         ).start();
-
-//         // Letter animation (top title)
-//         letters.forEach((_, i) => {
-//             setTimeout(() => {
-//                 Animated.parallel([
-//                     Animated.timing(opacityAnim[i], {
-//                         toValue: 1,
-//                         duration: 300,
-//                         useNativeDriver: true,
-//                     }),
-//                     Animated.timing(translateAnim[i], {
-//                         toValue: 0,
-//                         duration: 300,
-//                         useNativeDriver: true,
-//                     }),
-//                 ]).start();
-//             }, i * 150);
-//         });
-
-//         // Navigate
-//         setTimeout(() => {
-//             navigation.replace('Login');
-//         }, 2800);
-
-//     }, []);
-
-//     return (
-//         <View style={styles.container}>
-//             <StatusBar barStyle="dark-content" backgroundColor="transparent" />
-
-//             {/* TOP BRAND NAME */}
-//             <View style={styles.topContainer}>
-//                 <View style={styles.textRow}>
-//                     {letters.map((letter, index) => (
-//                         <Animated.Text
-//                             key={index}
-//                             style={[
-//                                 styles.text,
-//                                 {
-//                                     opacity: opacityAnim[index],
-//                                     transform: [{ translateY: translateAnim[index] }],
-//                                 },
-//                             ]}
-//                         >
-//                             {letter}
-//                         </Animated.Text>
-//                     ))}
-//                 </View>
-
-//                 <Text style={styles.tagline}>VITAL MONITORING SYSTEMS</Text>
-//             </View>
-
-//             {/* CENTER LOGO */}
-//             <View style={styles.centerContainer}>
-//                 <Animated.View
-//                     style={[
-//                         styles.glow,
-//                         { transform: [{ scale: glow }] },
-//                     ]}
-//                 />
-
-//                 <Animated.View
-//                     style={[
-//                         styles.logoWrapper,
-//                         {
-//                             opacity: logoFade,
-//                             transform: [{ scale: logoScale }],
-//                         },
-//                     ]}
-//                 >
-//                     <Image
-//                         source={require('../assets/img/logo1.png')}
-//                         style={styles.logo}
-//                         resizeMode="contain"
-//                     />
-//                 </Animated.View>
-//             </View>
-
-//             {/* BOTTOM SPACE */}
-//             <View style={{ flex: 1 }} />
-//         </View>
-//     );
-// };
-
-// export default SplashScreen;
-
-// const styles = StyleSheet.create({
-//     container: {
-//         flex: 1,
-//         backgroundColor: '#E6F9F2', // light green background
-//     },
-
-//     topContainer: {
-//         alignItems: 'center',
-//         marginTop: 80,
-//     },
-
-//     textRow: {
-//         flexDirection: 'row',
-//     },
-
-//     text: {
-//         fontSize: 30,
-//         fontWeight: '900',
-//         color: '#0F766E', // dark green (login theme)
-//         letterSpacing: 5,
-//     },
-
-//     tagline: {
-//         fontSize: 10,
-//         marginTop: 6,
-//         color: '#0F766E',
-//         letterSpacing: 2,
-//         opacity: 0.7,
-//     },
-
-//     centerContainer: {
-//         flex: 1,
-//         justifyContent: 'center',
-//         alignItems: 'center',
-//     },
-
-//     logoWrapper: {
-//         width: 110,
-//         height: 110,
-//         borderRadius: 60,
-//         backgroundColor: '#FFFFFF',
-//         justifyContent: 'center',
-//         alignItems: 'center',
-
-//         elevation: 10,
-//         shadowColor: '#10B981',
-//         shadowOffset: { width: 0, height: 6 },
-//         shadowOpacity: 0.3,
-//         shadowRadius: 12,
-//     },
-
-//     logo: {
-//         width: 80,
-//         height: 80,
-//         borderRadius: 40, // circular logo
-//     },
-
-//     glow: {
-//         position: 'absolute',
-//         width: 140,
-//         height: 140,
-//         borderRadius: 70,
-//         backgroundColor: '#10B981',
-//         opacity: 0.15,
-//     },
-// });
 import React, { useEffect, useRef } from 'react';
 import {
     View,
@@ -220,13 +16,30 @@ const SplashScreen = ({ navigation }) => {
     const letters = TITLE.split('');
 
     const opacityAnim = useRef(letters.map(() => new Animated.Value(0))).current;
-    const translateAnim = useRef(letters.map(() => new Animated.Value(20))).current;
-    const scaleAnim = useRef(new Animated.Value(0.95)).current;
+    const translateAnim = useRef(letters.map(() => new Animated.Value(15))).current;
+
+    const logoScale = useRef(new Animated.Value(0.7)).current;
+    const logoFade = useRef(new Animated.Value(0)).current;
+    const glow = useRef(new Animated.Value(1)).current;
 
     const brandFade = useRef(new Animated.Value(0)).current;
     const heartbeatFade = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
+        // Logo entry
+        Animated.parallel([
+            Animated.spring(logoScale, {
+                toValue: 1,
+                friction: 6,
+                useNativeDriver: true,
+            }),
+            Animated.timing(logoFade, {
+                toValue: 1,
+                duration: 600,
+                useNativeDriver: true,
+            }),
+        ]).start();
+
         // Main branding fade in
         Animated.timing(brandFade, {
             toValue: 1,
@@ -242,44 +55,50 @@ const SplashScreen = ({ navigation }) => {
             useNativeDriver: true,
         }).start();
 
-        // Letters animation
-        letters.forEach((_, i) => {
+        // Glow pulse
+        Animated.loop(
             Animated.sequence([
-                Animated.delay(i * 80 + 600),
+                Animated.timing(glow, {
+                    toValue: 1.2,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(glow, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+
+        // Letter animation (top title)
+        letters.forEach((_, i) => {
+            setTimeout(() => {
                 Animated.parallel([
                     Animated.timing(opacityAnim[i], {
                         toValue: 1,
-                        duration: 400,
+                        duration: 300,
                         useNativeDriver: true,
                     }),
                     Animated.timing(translateAnim[i], {
                         toValue: 0,
-                        duration: 600,
+                        duration: 300,
                         useNativeDriver: true,
                     }),
-                ])
-            ]).start();
+                ]).start();
+            }, i * 150);
         });
-
-        // Subtitle/Tagline Pop
-        Animated.spring(scaleAnim, {
-            toValue: 1,
-            friction: 4,
-            useNativeDriver: true,
-            delay: 1500,
-        }).start();
 
         // Navigate
         setTimeout(() => {
             navigation.replace('Login');
-        }, 4500);
+        }, 2800);
 
     }, []);
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" />
             <LinearGradient
                 colors={['#F0FAF6', '#FFFFFF', '#F0FAF6']}
                 style={styles.gradient}
@@ -298,7 +117,6 @@ const SplashScreen = ({ navigation }) => {
 
                 {/* 🏛️ Integrated Premium Branding Unit */}
                 <Animated.View style={[styles.brandingUnit, { opacity: brandFade }]}>
-
                     {/* Visual Logo (Subtle) */}
                     <View style={styles.logoBox}>
                         <Image
@@ -311,7 +129,7 @@ const SplashScreen = ({ navigation }) => {
                     {/* Text Components */}
                     <Text style={styles.welcomeText}>ESTABLISHED HEALTHCARE</Text>
 
-                    <Animated.View style={[styles.titleGroup, { transform: [{ scale: scaleAnim }] }]}>
+                    <Animated.View style={[styles.titleGroup]}>
                         <View style={styles.textRow}>
                             {letters.map((letter, index) => (
                                 <Animated.Text
@@ -375,7 +193,7 @@ const styles = StyleSheet.create({
     },
     logoBox: {
         marginBottom: 20,
-        opacity: 0.5, // Ultra-modern subtle logo 🔥
+        opacity: 0.5,
     },
     premiumLogo: {
         width: 60,
@@ -399,7 +217,7 @@ const styles = StyleSheet.create({
         alignItems: 'baseline',
     },
     title: {
-        fontSize: 52, // Larger, more impactful branding
+        fontSize: 52,
         color: '#0D9488',
         letterSpacing: 2,
     },

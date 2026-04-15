@@ -174,10 +174,10 @@ const ProfileScreen = ({ navigation, route }) => {
 
     const genderOptions = ['Male', 'Female', 'Other'];
     const deviceModelOptions = [
-        'AirSense 11 AutoSet',
-        'AirSense 10 AutoSet',
-        'AirSense 10 CPAP',
-        'AirCurve 10 VAuto',
+        'Airsine 11 AutoSet',
+        'Airsine 10 AutoSet',
+        'Airsine 10 CPAP',
+        'Airsine 10 VAuto',
         'DreamStation 2 Auto CPAP',
         'DreamStation CPAP',
         'Other',

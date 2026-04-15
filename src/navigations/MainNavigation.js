@@ -14,6 +14,9 @@ import ReportPreviewScreen from '../screens/ReportPreviewScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import SplashScreen from '../screens/SplaceScreen';
+import CreateUser from '../screens/CreateUser';
+import ForgotPassword from '../screens/ForgotPassword';
+import UpdateMachineSetting from '../screens/UpdateMachineSetting';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -94,11 +97,14 @@ const MainNavigation = () => {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Splash" component={SplashScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="CreateUser" component={CreateUser} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
             <Stack.Screen name="ProfileSetup" component={ProfileScreen} />
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="MachineSelection" component={MachineSelectionScreen} />
             <Stack.Screen name="ImportLog" component={ImportLogScreen} />
             <Stack.Screen name="Graphs" component={GraphScreen} />
+            <Stack.Screen name="UpdateMachineSetting" component={UpdateMachineSetting} />
         </Stack.Navigator>
     );
 };
