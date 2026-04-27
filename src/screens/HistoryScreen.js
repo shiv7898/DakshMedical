@@ -179,10 +179,11 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: Spacing.m,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
-        paddingBottom: 14,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+        paddingBottom: 10,
         backgroundColor: Colors.primary,
     },
+
     headerTitle: {
         fontSize: 18,
         fontWeight: 'bold',

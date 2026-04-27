@@ -4,9 +4,10 @@ const DataContext = createContext();
 
 export const DataProvider = ({ children }) => {
     const [selectedRange, setSelectedRange] = useState(7);
+    const [userRole, setUserRole] = useState('patient'); // 'patient', 'doctor', or 'distributor'
 
     return (
-        <DataContext.Provider value={{ selectedRange, setSelectedRange }}>
+        <DataContext.Provider value={{ selectedRange, setSelectedRange, userRole, setUserRole }}>
             {children}
         </DataContext.Provider>
     );

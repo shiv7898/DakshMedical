@@ -19,7 +19,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Spacing, Typography } from '../styles/theme';
-import { getPatientInfo, savePatientInfo, clearPatientInfo, clearLogs } from '../api/database';
+import { getPatientInfo, savePatientInfo, clearPatientInfo, clearLogs, getDoctorInfo, saveDoctorInfo, clearDoctorInfo, clearAllData } from '../api/database';
 import { useData } from '../context/DataContext';
 
 // ─── Colours & tokens ────────────────────────────────────────────────────────
@@ -157,12 +157,12 @@ const scStyles = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const ProfileScreen = ({ navigation, route }) => {
-    const { setSelectedRange } = useData();
+    const { setSelectedRange, userRole } = useData();
     const isSetup = route?.params?.isSetup || false;
     const [isEditing, setIsEditing] = useState(isSetup);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [patient, setPatient] = useState({});
+    const [profileData, setProfileData] = useState({});
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const scrollRef = useRef(null);
 
@@ -193,7 +193,7 @@ const ProfileScreen = ({ navigation, route }) => {
     };
 
     useEffect(() => {
-        loadPatientData();
+        loadProfileData();
 
         const keyboardDidShowListener = Keyboard.addListener(
             Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
@@ -218,26 +218,36 @@ const ProfileScreen = ({ navigation, route }) => {
         };
     }, [isEditing]);
 
-    const loadPatientData = async () => {
+    const loadProfileData = async () => {
         setLoading(true);
         try {
-            const data = await getPatientInfo();
-            if (data) setPatient(data);
-            else if (isSetup) setIsEditing(true);
+            if (userRole === 'doctor') {
+                const data = await getDoctorInfo();
+                if (data) setProfileData(data);
+                else if (isSetup) setIsEditing(true);
+            } else {
+                const data = await getPatientInfo();
+                if (data) setProfileData(data);
+                else if (isSetup) setIsEditing(true);
+            }
         } catch (e) {
-            console.error('Failed to load patient data:', e);
+            console.error('Failed to load profile data:', e);
         }
         setLoading(false);
     };
 
     const handleSave = async () => {
-        if (!patient.name?.trim()) {
-            Alert.alert('Required', 'Please enter the patient name before saving.');
+        if (!profileData.name?.trim()) {
+            Alert.alert('Required', 'Please enter the name before saving.');
             return;
         }
         try {
             setSaving(true);
-            await savePatientInfo(patient);
+            if (userRole === 'doctor') {
+                await saveDoctorInfo(profileData);
+            } else {
+                await savePatientInfo(profileData);
+            }
             if (isSetup) {
                 navigation.replace('MainTabs');
             } else {
@@ -245,7 +255,7 @@ const ProfileScreen = ({ navigation, route }) => {
                 Alert.alert('✅ Saved', 'Profile updated successfully.');
             }
         } catch (e) {
-            console.error('Failed to save patient data:', e);
+            console.error('Failed to save profile data:', e);
             Alert.alert('Error', 'Could not save profile. Please try again.');
         } finally {
             setSaving(false);
@@ -253,7 +263,7 @@ const ProfileScreen = ({ navigation, route }) => {
     };
 
     const handleInputChange = (field, text) => {
-        setPatient(prev => ({ ...prev, [field]: text }));
+        setProfileData(prev => ({ ...prev, [field]: text }));
     };
 
     const handleActionPress = (field, type) => {
@@ -293,9 +303,13 @@ const ProfileScreen = ({ navigation, route }) => {
                     text: 'Logout', style: 'destructive',
                     onPress: async () => {
                         try {
+                            // 1. Reset context range
                             setSelectedRange(7);
-                            await clearPatientInfo();
-                            await clearLogs();
+                            
+                            // 2. Clear ENTIRE Database (Patients, Doctors, and Logs)
+                            await clearAllData();
+                            
+                            console.log("Database cleared successfully.");
                             navigation.replace('Login');
                         } catch (e) {
                             setSelectedRange(7);
@@ -307,7 +321,7 @@ const ProfileScreen = ({ navigation, route }) => {
         );
     };
 
-    const initials = (patient?.name || 'P')
+    const initials = (profileData?.name || (userRole === 'doctor' ? 'D' : 'P'))
         .split(' ')
         .map(w => w[0])
         .join('')
@@ -318,7 +332,7 @@ const ProfileScreen = ({ navigation, route }) => {
     const fp = (field) => ({
         editable: field,
         isEditing,
-        value: patient?.[field],
+        value: profileData?.[field],
         onChangeText: handleInputChange,
     });
     const fpAction = (field, type) => ({
@@ -347,13 +361,13 @@ const ProfileScreen = ({ navigation, route }) => {
                         <Icon name="arrow-left" size={22} color="#fff" />
                     </TouchableOpacity>
                 )}
-                <Text style={styles.topTitle}>Patient Profile</Text>
+                <Text style={styles.topTitle}>{userRole === 'doctor' ? 'Doctor Profile' : 'Patient Profile'}</Text>
                 <TouchableOpacity
                     style={styles.editBtn}
                     onPress={() => {
                         if (isEditing) {
                             setIsEditing(false);
-                            loadPatientData(); // reset unsaved changes
+                            loadProfileData(); // reset unsaved changes
                         } else {
                             setIsEditing(true);
                         }
@@ -386,32 +400,69 @@ const ProfileScreen = ({ navigation, route }) => {
                             </Animated.View>
                         </TouchableOpacity>
                         <Text style={styles.heroName}>
-                            {patient?.name || (isSetup ? 'New Patient' : 'Your Name')}
+                            {profileData?.name || (isSetup ? `New ${userRole === 'doctor' ? 'Doctor' : 'Patient'}` : 'Your Name')}
                         </Text>
                         <View style={styles.idBadge}>
-                            {/* <Icon name="identifier" size={13} color={PRIMARY_LIGHT} /> */}
                             <Text style={styles.idBadgeText}>
-                                ID: P-{patient?.patient_custom_id || patient?.id || 'Not Assigned'}
+                                ID: {userRole === 'doctor' ? 'D' : 'P'}-{profileData?.patient_custom_id || profileData?.id || 'Not Assigned'}
                             </Text>
                         </View>
-                        {patient?.gender ? (
+                        {profileData?.gender && userRole !== 'doctor' ? (
                             <Text style={styles.heroBio}>
-                                {patient.gender}{patient?.age ? `  ·  ${patient.age} yrs` : ''}{patient?.dob ? `  ·  ${patient.dob}` : ''}
+                                {profileData.gender}{profileData?.age ? `  ·  ${profileData.age} yrs` : ''}{profileData?.dob ? `  ·  ${profileData.dob}` : ''}
                             </Text>
                         ) : null}
                     </View>
 
-                    {/* ── Personal Information ── */}
+                    {/* ── Role Specific / Doctor Information ── */}
+                    {userRole === 'doctor' && (
+                        <SectionCard title="Doctor Information" iconName="doctor">
+                            <FieldRow
+                                label="Full Name"
+                                icon="account-details-outline"
+                                placeholder="e.g. Dr. Anil Kumar"
+                                {...fp('name')}
+                            />
+                            <FieldRow
+                                label="Hospital / Clinic Name"
+                                icon="hospital-building"
+                                placeholder="e.g. Apollo Hospital"
+                                {...fp('hospital')}
+                            />
+                            <FieldRow
+                                label="Specialisation"
+                                icon="stethoscope"
+                                placeholder="e.g. Pulmonologist"
+                                {...fp('specialization')}
+                            />
+                            <FieldRow
+                                label="Qualification"
+                                icon="school-outline"
+                                placeholder="e.g. MBBS, MD"
+                                {...fp('qualification')}
+                            />
+                            <FieldRow
+                                label="Experience"
+                                icon="briefcase-outline"
+                                placeholder="e.g. 15 Years"
+                                {...fp('experience')}
+                            />
+                        </SectionCard>
+                    )}
+
+                    {/* ── Personal Information (Visible to both Patient & Doctor) ── */}
                     <SectionCard title="Personal Information" iconName="account-outline">
+                        {userRole === 'patient' && (
+                            <FieldRow
+                                label="Patient ID"
+                                icon="identifier"
+                                placeholder="e.g. 01"
+                                keyboardType="default"
+                                {...fp('patient_custom_id')}
+                            />
+                        )}
                         <FieldRow
-                            label="Patient ID"
-                            icon="identifier"
-                            placeholder="e.g. 01"
-                            keyboardType="default"
-                            {...fp('patient_custom_id')}
-                        />
-                        <FieldRow
-                            label="Full Name"
+                            label={userRole === 'doctor' ? "Contact Name" : "Full Name"}
                             icon="account-details-outline"
                             placeholder="e.g. user name"
                             {...fp('name')}
@@ -450,30 +501,57 @@ const ProfileScreen = ({ navigation, route }) => {
                             {...fp('email')}
                         />
                         <FieldRow
-                            label="Residential Address"
+                            label="Home No. / Building"
+                            icon="home-outline"
+                            placeholder="e.g. 102, Medical Enclave"
+                            {...fp('homeAddress')}
+                        />
+                        <FieldRow
+                            label="Area / Locality"
+                            icon="map-outline"
+                            placeholder="e.g. Rohini Sector 7"
+                            {...fp('area')}
+                        />
+                        <FieldRow
+                            label="District"
+                            icon="map-marker-radius-outline"
+                            placeholder="e.g. New Delhi"
+                            {...fp('district')}
+                        />
+                        <FieldRow
+                            label="State"
                             icon="map-marker-outline"
-                            placeholder="e.g. 102, Medical Enclave, New Delhi"
+                            placeholder="e.g. Delhi"
+                            {...fp('state')}
+                        />
+                        <FieldRow
+                            label="Pincode"
+                            icon="numeric"
+                            placeholder="e.g. 110085"
+                            keyboardType="numeric"
                             last={true}
-                            {...fp('address')}
+                            {...fp('pincode')}
                         />
                     </SectionCard>
 
-                    {/* ── CPAP Device ── */}
-                    <SectionCard title="CPAP Device" iconName="medical-bag">
-                        <FieldRow
-                            label="Device Model"
-                            icon="cpu-64-bit"
-                            placeholder="Select device model"
-                            {...fpAction('device_model', 'select')}
-                        />
-                        <FieldRow
-                            label="Device Serial No (SN)"
-                            icon="barcode-scan"
-                            placeholder="e.g. AS11-9238-120"
-                            last={true}
-                            {...fp('machine_serial')}
-                        />
-                    </SectionCard>
+                    {/* ── CPAP Device (Patient Only) ── */}
+                    {userRole === 'patient' && (
+                        <SectionCard title="CPAP Device" iconName="medical-bag">
+                            <FieldRow
+                                label="Device Model"
+                                icon="cpu-64-bit"
+                                placeholder="Select device model"
+                                {...fpAction('device_model', 'select')}
+                            />
+                            <FieldRow
+                                label="Device Serial No (SN)"
+                                icon="barcode-scan"
+                                placeholder="e.g. AS11-9238-120"
+                                last={true}
+                                {...fp('machine_serial')}
+                            />
+                        </SectionCard>
+                    )}
 
                     {/* ── Referring Physician ── */}
                     {/* <SectionCard title="Referring Physician" iconName="doctor">
@@ -528,8 +606,8 @@ const ProfileScreen = ({ navigation, route }) => {
             {showDatePicker && (
                 <DateTimePicker
                     value={
-                        (patient?.dob && !isNaN(Date.parse(patient.dob.replace(/-/g, ' '))))
-                            ? new Date(patient.dob.replace(/-/g, ' '))
+                        (profileData?.dob && !isNaN(Date.parse(profileData.dob.replace(/-/g, ' '))))
+                            ? new Date(profileData.dob.replace(/-/g, ' '))
                             : new Date(1990, 0, 1)
                     }
                     mode="date"
@@ -557,18 +635,18 @@ const ProfileScreen = ({ navigation, route }) => {
                                     key={i}
                                     style={[
                                         styles.modalOpt,
-                                        patient?.[currentSelectField] === opt && styles.modalOptActive,
+                                        profileData?.[currentSelectField] === opt && styles.modalOptActive,
                                         i === currentSelectOptions.length - 1 && { borderBottomWidth: 0 },
                                     ]}
                                     onPress={() => handleOptionSelect(opt)}
                                 >
                                     <Text style={[
                                         styles.modalOptText,
-                                        patient?.[currentSelectField] === opt && { color: PRIMARY, fontWeight: 'bold' },
+                                        profileData?.[currentSelectField] === opt && { color: PRIMARY, fontWeight: 'bold' },
                                     ]}>
                                         {opt}
                                     </Text>
-                                    {patient?.[currentSelectField] === opt && (
+                                    {profileData?.[currentSelectField] === opt && (
                                         <Icon name="check-circle" size={18} color={PRIMARY_LIGHT} />
                                     )}
                                 </TouchableOpacity>

@@ -12,8 +12,11 @@ import {
     StatusBar,
     Dimensions,
     Linking,
-    PermissionsAndroid
+    PermissionsAndroid,
+    Modal,
+    TextInput
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Spacing, Typography } from '../styles/theme';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { generatePDF as createPDF } from 'react-native-html-to-pdf';
@@ -23,7 +26,7 @@ import Share from 'react-native-share';
 import { LineChart, BarChart, StackedBarChart } from 'react-native-chart-kit';
 import RNFS from 'react-native-fs';
 import notifee, { AndroidImportance, AndroidStyle, EventType } from '@notifee/react-native';
-import { getLogs, getPatientInfo } from '../api/database';
+import { getLogs, getPatientInfo, getDoctorInfo } from '../api/database';
 import { useData } from '../context/DataContext';
 
 
@@ -52,12 +55,72 @@ const ReportPreviewScreen = () => {
     const [graphLogs9, setGraphLogs9] = useState([]);
     const [graphLogs7, setGraphLogs7] = useState([]);
     const [patient, setPatient] = useState(null);
+    const [doctor, setDoctor] = useState(null);
     const [generating, setGenerating] = useState(false);
-    const { selectedRange } = useData();
+    const { selectedRange, userRole } = useData();
     const pressureGridRef = useRef(null);
     const flowChartRef = useRef(null);
     const ahiMiniChartRef = useRef(null);
     const leakMiniChartRef = useRef(null);
+
+    // Doctor/Patient info-form state
+    const [showDoctorModal, setShowDoctorModal] = useState(false);
+    const [tempPatientInfo, setTempPatientInfo] = useState({
+        patient_custom_id: '',
+        name: '',
+        age: '',
+        gender: 'Male',
+        dob: '',
+        phone: '',
+        email: '',
+        device_model: '',
+        machine_serial: ''
+    });
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showGenderModal, setShowGenderModal] = useState(false);
+
+    const calculateAge = (dobString) => {
+        if (!dobString) return '';
+        // Handle dd-MMM-yyyy or ISO
+        let birthDate;
+        if (dobString.includes('-')) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const parts = dobString.split('-');
+            if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const month = months.indexOf(parts[1]);
+                const year = parseInt(parts[2], 10);
+                birthDate = new Date(year, month, day);
+            } else {
+                birthDate = new Date(dobString);
+            }
+        } else {
+            birthDate = new Date(dobString);
+        }
+
+        if (isNaN(birthDate.getTime())) return '';
+        
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age.toString();
+    };
+
+    const handleDateChange = (event, selectedDate) => {
+        setShowDatePicker(false);
+        if (selectedDate) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const d = selectedDate.getDate().toString().padStart(2, '0');
+            const m = months[selectedDate.getMonth()];
+            const y = selectedDate.getFullYear();
+            const dobStr = `${d}-${m}-${y}`;
+            const newAge = calculateAge(dobStr);
+            setTempPatientInfo({ ...tempPatientInfo, dob: dobStr, age: newAge });
+        }
+    };
 
     // 🔔 Foreground event handler — open PDF when notification is tapped while app is open
     useEffect(() => {
@@ -79,7 +142,7 @@ const ReportPreviewScreen = () => {
     const fetchData = React.useCallback(async () => {
         try {
             console.log('⚡ Optimized Fetch: Report Data (Range:', selectedRange, ')');
-            const [logData, patientData] = await Promise.all([getLogs(), getPatientInfo()]);
+            const [logData, patientData, doctorData] = await Promise.all([getLogs(), getPatientInfo(), getDoctorInfo()]);
 
             const tableLogs = (logData || []).slice(0, selectedRange);
             const reportGraphLogs9 = (logData || []).slice(0, 9);
@@ -90,6 +153,7 @@ const ReportPreviewScreen = () => {
             setGraphLogs9(reportGraphLogs9);
             setGraphLogs7(reportGraphLogs7);
             setPatient(patientData || { name: 'Daksh Singh', age: 32, machine_serial: 'AIR-9922-G3' });
+            setDoctor(doctorData || { name: 'Dr. Smith', phone: '9876543210' });
         } catch (error) {
             console.error('Error fetching data for report:', error);
             setLogs([]);
@@ -209,12 +273,38 @@ const ReportPreviewScreen = () => {
         }
     };
 
-    const handleGeneratePDF = async () => {
+    const handleGenerateClick = () => {
         if (!logs || logs.length === 0 || (logs.length === 1 && logs[0].id === 9999)) {
             Alert.alert('No Clinical Data', 'Please import therapy logs from the machine selection screen first.');
             return;
         }
 
+        // Initialize form with current patient data if available
+        setTempPatientInfo({
+            patient_custom_id: patient?.patient_custom_id || '',
+            name: patient?.name || '',
+            age: patient?.age?.toString() || '',
+            gender: patient?.gender || 'Male',
+            dob: patient?.dob || '',
+            phone: patient?.phone || '',
+            email: patient?.email || '',
+            device_model: patient?.device_model || '',
+            machine_serial: patient?.machine_serial || ''
+        });
+
+        setShowDoctorModal(true);
+    };
+
+    const handleDoctorFormSubmit = () => {
+        if (!tempPatientInfo.name) {
+            Alert.alert('Required', 'Please enter at least the patient name.');
+            return;
+        }
+        setShowDoctorModal(false);
+        handleGeneratePDF(tempPatientInfo);
+    };
+
+    const handleGeneratePDF = async (patientDataToUse) => {
         setGenerating(true);
         try {
             // Small delay to ensure charts are fully rendered in their hidden container before capture
@@ -420,7 +510,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
     <div class="hdr-right">
         <div><b>Report Date:</b> ${dateStr}</div>
         <div><b>Total Days:</b> ${logs.length}</div>
-        <div><b>Device:</b> ${patient?.machine_serial || '-'}</div>
+        <div><b>Device:</b> ${patientDataToUse?.machine_serial || '-'}</div>
     </div>
 </div>
 
@@ -431,20 +521,20 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
     <div class="sec-title">Patient Details</div>
     <table class="ig">
         <tr>
-            <td class="lbl">Patient ID:</td><td class="val">P-${patient?.patient_custom_id || patient?.id || '-'}</td>
-            <td class="lbl">Full Name:</td><td class="val">${patient?.name || 'N/A'}</td>
+            <td class="lbl">Patient ID:</td><td class="val">P-${patientDataToUse?.patient_custom_id || patientDataToUse?.id || '-'}</td>
+            <td class="lbl">Full Name:</td><td class="val">${patientDataToUse?.name || 'N/A'}</td>
         </tr>
         <tr>
-            <td class="lbl">Gender:</td><td class="val">${patient?.gender || '-'}</td>
-            <td class="lbl">Date of Birth:</td><td class="val">${patient?.dob || '-'}</td>
+            <td class="lbl">Gender:</td><td class="val">${patientDataToUse?.gender || '-'}</td>
+            <td class="lbl">Date of Birth:</td><td class="val">${patientDataToUse?.dob || '-'}</td>
         </tr>
         <tr>
-            <td class="lbl">Phone:</td><td class="val">${patient?.phone || '-'}</td>
-            <td class="lbl">Email:</td><td class="val">${patient?.email || '-'}</td>
+            <td class="lbl">Phone:</td><td class="val">${patientDataToUse?.phone || '-'}</td>
+            <td class="lbl">Email:</td><td class="val">${patientDataToUse?.email || '-'}</td>
         </tr>
         <tr>
-            <td class="lbl">Device Model:</td><td class="val">${patient?.device_model || '-'}</td>
-            <td class="lbl">Device Serial No:</td><td class="val">${patient?.machine_serial || '-'}</td>
+            <td class="lbl">Device Model:</td><td class="val">${patientDataToUse?.device_model || '-'}</td>
+            <td class="lbl">Device Serial No:</td><td class="val">${patientDataToUse?.machine_serial || '-'}</td>
         </tr>
     </table>
 </div>
@@ -455,8 +545,8 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
     <div class="sec-title">Referring Physician</div>
     <table class="ig">
         <tr>
-            <td class="lbl">Doctor Name:</td><td class="val">${patient?.doctor_name || '-'}</td>
-            <td class="lbl">Doctor Phone:</td><td class="val">${patient?.doctor_phone || '-'}</td>
+            <td class="lbl">Doctor Name:</td><td class="val">${userRole === 'doctor' ? (doctor?.name || '-') : (patientDataToUse?.doctor_name || '-')}</td>
+            <td class="lbl">Doctor Phone:</td><td class="val">${userRole === 'doctor' ? (doctor?.phone || '-') : (patientDataToUse?.doctor_phone || '-')}</td>
         </tr>
     </table>
 </div>
@@ -547,7 +637,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 <div class="page2">
     <div class="p2hdr">
         <h2>&#x1F4C8; Respiratory Trends Summary</h2>
-        <span>Patient: ${patient?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
+        <span>Patient: ${patientDataToUse?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
     </div>
 
     <div style="margin-top:20px;">
@@ -566,7 +656,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 <div class="page3" style="height:1040px; position:relative;">
     <div class="p2hdr">
         <h2>&#x1F4C8; 9-Day Clinical Pressure Analysis</h2>
-        <span>Patient: ${patient?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
+        <span>Patient: ${patientDataToUse?.name || '-'} &nbsp;|&nbsp; ${dateStr}</span>
     </div>
 
     <div style="margin-top:10px; background:#fff; border:1px solid #edf2f7; border-radius:12px; padding:15px; text-align:center;">
@@ -586,8 +676,8 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
         <div class="sig-blk">
             <div class="sig-line"></div>
             <div class="sig-lbl">Authorised Physician</div>
-            <div class="sig-sub">${patient?.doctor_name || 'Doctor Name'}</div>
-            <div class="sig-sub">${patient?.doctor_phone || ''}</div>
+            <div class="sig-sub">${userRole === 'doctor' ? (doctor?.name || 'Doctor Name') : (patientDataToUse?.doctor_name || 'Doctor Name')}</div>
+            <div class="sig-sub">${userRole === 'doctor' ? (doctor?.phone || '') : (patientDataToUse?.doctor_phone || '')}</div>
         </div>
         <div class="sig-blk">
             <div class="sig-line"></div>
@@ -597,13 +687,13 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
         <div class="sig-blk">
             <div class="sig-line"></div>
             <div class="sig-lbl">Patient Signature</div>
-            <div class="sig-sub">${patient?.name || '-'}</div>
+            <div class="sig-sub">${patientDataToUse?.name || '-'}</div>
         </div>
     </div>
 
     <div class="footer">
         Airsine CPAP Therapy Management System &nbsp;|&nbsp; Confidential – Medical Use Only
-        &nbsp;|&nbsp; Device SN: ${patient?.machine_serial || '-'} &nbsp;|&nbsp; ${dateStr}
+        &nbsp;|&nbsp; Device SN: ${patientDataToUse?.machine_serial || '-'} &nbsp;|&nbsp; ${dateStr}
     </div>
 </div>
 
@@ -935,7 +1025,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                         Generate a professional PDF report containing your therapy trends, compliance score, and detailed session logs.
                     </Text>
 
-                    <TouchableOpacity style={styles.downloadBtn} onPress={handleGeneratePDF} disabled={generating}>
+                    <TouchableOpacity style={styles.downloadBtn} onPress={handleGenerateClick} disabled={generating}>
                         {generating ? (
                             <ActivityIndicator color="#FFF" />
                         ) : (
@@ -962,6 +1052,165 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
                 {/* Modern Dashboard Graphs */}
 
             </ScrollView>
+
+            {/* Doctor Form Modal */}
+            <Modal visible={showDoctorModal} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Icon name="account-edit-outline" size={24} color={Colors.primary} />
+                            <Text style={styles.modalTitle}>Patient Information</Text>
+                        </View>
+                        <Text style={styles.modalSub}>
+                            Please enter the patient's details before generating the report.
+                        </Text>
+
+                        <ScrollView showsVerticalScrollIndicator={false} style={styles.modalForm}>
+                            <Text style={styles.inputLabel}>Patient Name *</Text>
+                            <TextInput
+                                style={styles.inputField}
+                                placeholder="Enter Patient Name"
+                                value={tempPatientInfo.name}
+                                onChangeText={text => setTempPatientInfo({ ...tempPatientInfo, name: text })}
+                            />
+
+                            <View style={styles.inputRow}>
+                                <View style={{ flex: 1, marginRight: 10 }}>
+                                    <Text style={styles.inputLabel}>Age</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        placeholder="e.g. 45"
+                                        keyboardType="numeric"
+                                        value={tempPatientInfo.age}
+                                        onChangeText={text => setTempPatientInfo({ ...tempPatientInfo, age: text })}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.inputLabel}>Gender</Text>
+                                    <TouchableOpacity 
+                                        style={styles.dropdownField}
+                                        onPress={() => setShowGenderModal(true)}
+                                    >
+                                        <Text style={[styles.dropdownText, !tempPatientInfo.gender && { color: '#999' }]}>
+                                            {tempPatientInfo.gender || 'Select Gender'}
+                                        </Text>
+                                        <Icon name="chevron-down" size={20} color={Colors.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <View style={styles.inputRow}>
+                                <View style={{ flex: 1, marginRight: 10 }}>
+                                    <Text style={styles.inputLabel}>Date of Birth</Text>
+                                    <TouchableOpacity 
+                                        style={styles.dropdownField}
+                                        onPress={() => setShowDatePicker(true)}
+                                    >
+                                        <Text style={[styles.dropdownText, !tempPatientInfo.dob && { color: '#999' }]}>
+                                            {tempPatientInfo.dob || 'Select DOB'}
+                                        </Text>
+                                        <Icon name="calendar-month-outline" size={20} color={Colors.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.inputLabel}>Patient ID</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        placeholder="e.g. P-001"
+                                        value={tempPatientInfo.patient_custom_id}
+                                        onChangeText={text => setTempPatientInfo({ ...tempPatientInfo, patient_custom_id: text })}
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.inputRow}>
+                                <View style={{ flex: 1, marginRight: 10 }}>
+                                    <Text style={styles.inputLabel}>Phone Number</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        placeholder="e.g. +91 9876..."
+                                        keyboardType="phone-pad"
+                                        value={tempPatientInfo.phone}
+                                        onChangeText={text => setTempPatientInfo({ ...tempPatientInfo, phone: text })}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.inputLabel}>Email Address</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        placeholder="e.g. patient@mail.com"
+                                        keyboardType="email-address"
+                                        value={tempPatientInfo.email}
+                                        onChangeText={text => setTempPatientInfo({ ...tempPatientInfo, email: text })}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* <Text style={styles.inputLabel}>Device Model</Text>
+                            <TextInput
+                                style={styles.inputField}
+                                placeholder="e.g. Airsine 11 AutoSet"
+                                value={tempPatientInfo.device_model}
+                                onChangeText={text => setTempPatientInfo({ ...tempPatientInfo, device_model: text })}
+                            />
+
+                            <Text style={styles.inputLabel}>Device Serial No</Text>
+                            <TextInput
+                                style={styles.inputField}
+                                placeholder="e.g. AS11-1234"
+                                value={tempPatientInfo.machine_serial}
+                                onChangeText={text => setTempPatientInfo({ ...tempPatientInfo, machine_serial: text })}
+                            /> */}
+
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowDoctorModal(false)}>
+                                    <Text style={styles.modalCancelText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleDoctorFormSubmit}>
+                                    <Text style={styles.modalSubmitText}>Generate</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Date Picker */}
+            {showDatePicker && (
+                <DateTimePicker
+                    value={tempPatientInfo.dob ? new Date(tempPatientInfo.dob.split('-').reverse().join('-')) : new Date(1990, 0, 1)}
+                    mode="date"
+                    display="default"
+                    maximumDate={new Date()}
+                    onChange={handleDateChange}
+                />
+            )}
+
+            {/* Gender Picker Modal */}
+            <Modal visible={showGenderModal} transparent animationType="fade">
+                <TouchableOpacity 
+                    style={styles.genderModalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setShowGenderModal(false)}
+                >
+                    <View style={styles.genderPickerCard}>
+                        <Text style={styles.genderTitle}>Select Gender</Text>
+                        {['Male', 'Female', 'Other'].map((item) => (
+                            <TouchableOpacity 
+                                key={item} 
+                                style={styles.genderOption} 
+                                onPress={() => {
+                                    setTempPatientInfo({ ...tempPatientInfo, gender: item });
+                                    setShowGenderModal(false);
+                                }}
+                            >
+                                <Text style={styles.genderOptionText}>{item}</Text>
+                                {tempPatientInfo.gender === item && <Icon name="check-circle" size={20} color={Colors.primary} />}
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -987,9 +1236,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: Spacing.xl,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 14,
-        paddingBottom: 20,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+        paddingBottom: 10,
         backgroundColor: Colors.primary,
+        elevation: 8,
     },
     headerTitle: {
         fontSize: 18,
@@ -1237,6 +1487,135 @@ const styles = StyleSheet.create({
         fontSize: 9,
         color: '#94A3B8',
         fontStyle: 'italic',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        maxHeight: '85%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        gap: 10,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Colors.text,
+    },
+    modalSub: {
+        fontSize: 13,
+        color: Colors.textSecondary,
+        marginBottom: 20,
+    },
+    modalForm: {
+        marginBottom: 10,
+    },
+    inputLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: Colors.textSecondary,
+        marginBottom: 6,
+    },
+    inputField: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        height: 48,
+        fontSize: 14,
+        color: Colors.text,
+        marginBottom: 16,
+    },
+    inputRow: {
+        flexDirection: 'row',
+    },
+    modalActions: {
+        flexDirection: 'row',
+        marginTop: 10,
+        gap: 12,
+    },
+    modalCancelBtn: {
+        flex: 1,
+        paddingVertical: 14,
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        borderRadius: 12,
+    },
+    modalCancelText: {
+        color: Colors.text,
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    modalSubmitBtn: {
+        flex: 1,
+        paddingVertical: 14,
+        alignItems: 'center',
+        backgroundColor: Colors.primary,
+        borderRadius: 12,
+    },
+    modalSubmitText: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    dropdownField: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        height: 48,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+    dropdownText: {
+        fontSize: 14,
+        color: Colors.text,
+    },
+    genderModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    genderPickerCard: {
+        backgroundColor: '#FFF',
+        width: '80%',
+        borderRadius: 20,
+        padding: 20,
+        elevation: 10,
+    },
+    genderTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.text,
+        marginBottom: 15,
+        textAlign: 'center',
+    },
+    genderOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    genderOptionText: {
+        fontSize: 15,
+        color: Colors.text,
     },
 });
 

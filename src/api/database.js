@@ -13,18 +13,29 @@ const db = SQLite.openDatabase(
 
 export const setupDatabase = () => {
   db.transaction(tx => {
-    // Force schema update because of missing columns like pressure_95th
-    tx.executeSql('DROP TABLE IF EXISTS logs');
-    tx.executeSql('DROP TABLE IF EXISTS patients');
+    // 💡 CREATE TABLE IF NOT EXISTS ensures persistence. 
+    // Data is only cleared via clearAllData() during Logout.
 
     tx.executeSql(
       `CREATE TABLE IF NOT EXISTS patients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         patient_custom_id TEXT,
         name TEXT, age INTEGER, gender TEXT, dob TEXT,
-        address TEXT, phone TEXT, email TEXT,
+        homeAddress TEXT, area TEXT, district TEXT, state TEXT, pincode TEXT,
+        phone TEXT, email TEXT,
         device_model TEXT, machine_serial TEXT,
         doctor_name TEXT, doctor_phone TEXT
+      )`,
+      []
+    );
+    tx.executeSql(
+      `CREATE TABLE IF NOT EXISTS doctors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT, age INTEGER, gender TEXT, dob TEXT,
+        homeAddress TEXT, area TEXT, district TEXT, state TEXT, pincode TEXT,
+        phone TEXT, email TEXT,
+        hospital TEXT, specialisation TEXT,
+        qualification TEXT, experience TEXT, license TEXT
       )`,
       []
     );
@@ -288,7 +299,11 @@ export const savePatientInfo = (patientData) => {
       patientData?.age || "",
       patientData?.gender || "",
       patientData?.dob || "",
-      patientData?.address || "",
+      patientData?.homeAddress || "",
+      patientData?.area || "",
+      patientData?.district || "",
+      patientData?.state || "",
+      patientData?.pincode || "",
       patientData?.phone || "",
       patientData?.email || "",
       patientData?.device_model || "",
@@ -307,7 +322,8 @@ export const savePatientInfo = (patientData) => {
             tx.executeSql(
               `UPDATE patients SET
                 patient_custom_id=?, name=?, age=?, gender=?, dob=?,
-                address=?, phone=?, email=?, device_model=?, machine_serial=?,
+                homeAddress=?, area=?, district=?, state=?, pincode=?,
+                phone=?, email=?, device_model=?, machine_serial=?,
                 doctor_name=?, doctor_phone=?
                WHERE id=?`,
               [...params, id],
@@ -325,8 +341,8 @@ export const savePatientInfo = (patientData) => {
           } else {
             tx.executeSql(
               `INSERT INTO patients
-                (patient_custom_id, name, age, gender, dob, address, phone, email, device_model, machine_serial, doctor_name, doctor_phone)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                (patient_custom_id, name, age, gender, dob, homeAddress, area, district, state, pincode, phone, email, device_model, machine_serial, doctor_name, doctor_phone)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               params,
               (_tx, res) => resolve(res),
               (_tx, err) => {
@@ -362,6 +378,175 @@ export const clearLogs = () => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
       tx.executeSql('DELETE FROM logs', [], (_, res) => resolve(res), (_, err) => reject(err));
+    });
+  });
+};
+
+export const clearAllData = () => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      console.log("☢️ NUCLEAR WIPE: Dropping all tables...");
+      tx.executeSql('DROP TABLE IF EXISTS patients');
+      tx.executeSql('DROP TABLE IF EXISTS doctors');
+      tx.executeSql('DROP TABLE IF EXISTS logs');
+
+      // 1. Recreate Patients
+      tx.executeSql(
+        `CREATE TABLE patients (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          patient_custom_id TEXT,
+          name TEXT, age INTEGER, gender TEXT, dob TEXT,
+          homeAddress TEXT, area TEXT, district TEXT, state TEXT, pincode TEXT,
+          phone TEXT, email TEXT,
+          device_model TEXT, machine_serial TEXT,
+          doctor_name TEXT, doctor_phone TEXT
+        )`
+      );
+
+      // 2. Recreate Doctors
+      tx.executeSql(
+        `CREATE TABLE doctors (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT, age INTEGER, gender TEXT, dob TEXT,
+          homeAddress TEXT, area TEXT, district TEXT, state TEXT, pincode TEXT,
+          phone TEXT, email TEXT,
+          hospital TEXT, specialisation TEXT,
+          qualification TEXT, experience TEXT, license TEXT
+        )`
+      );
+
+      // 3. Recreate Logs
+      tx.executeSql(
+        `CREATE TABLE logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          patient_id INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          usage_hours REAL DEFAULT 0,
+          therapy_type TEXT DEFAULT 'CPAP',
+          avg_set_pressure REAL DEFAULT 0,
+          pressure_min REAL DEFAULT 0,
+          pressure_max REAL DEFAULT 0,
+          pressure_avg REAL DEFAULT 0,
+          ramp_start_pressure REAL DEFAULT 0,
+          pressure_off INTEGER DEFAULT 0,
+          ramp_duration INTEGER DEFAULT 0,
+          avg_flow REAL DEFAULT 0,
+          leak_rate REAL DEFAULT 0,
+          large_leak_percent REAL DEFAULT 0,
+          avg_resp_rate REAL DEFAULT 0,
+          ahi REAL DEFAULT 0,
+          snore_index REAL DEFAULT 0,
+          hypopnea_count INTEGER DEFAULT 0,
+          mask_fault_count INTEGER DEFAULT 0,
+          mask_off_count INTEGER DEFAULT 0,
+          low_pressure_count INTEGER DEFAULT 0,
+          compliance_percent REAL DEFAULT 0,
+          machine_type TEXT DEFAULT 'CPAP'
+        )`
+      );
+    }, (err) => {
+      console.error("❌ Full Database Wipe Failed:", err);
+      reject(err);
+    }, () => {
+      console.log("✅ Database Nuked and Recreated Successfully");
+      resolve(true);
+    });
+  });
+};
+
+export const getDoctorInfo = () => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT * FROM doctors LIMIT 1',
+        [],
+        (_, results) => {
+          if (results.rows.length > 0) {
+            resolve(results.rows.item(0));
+          } else {
+            resolve(null);
+          }
+        },
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const saveDoctorInfo = (doctorData) => {
+  return new Promise((resolve, reject) => {
+    const params = [
+      doctorData?.name || "",
+      doctorData?.age || "",
+      doctorData?.gender || "",
+      doctorData?.dob || "",
+      doctorData?.homeAddress || "",
+      doctorData?.area || "",
+      doctorData?.district || "",
+      doctorData?.state || "",
+      doctorData?.pincode || "",
+      doctorData?.phone || "",
+      doctorData?.email || "",
+      doctorData?.hospital || "",
+      doctorData?.specialisation || "",
+      doctorData?.qualification || "",
+      doctorData?.experience || "",
+      doctorData?.license || "",
+    ];
+
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT id FROM doctors LIMIT 1',
+        [],
+        (tx, results) => {
+          if (results.rows.length > 0) {
+            const id = results.rows.item(0).id;
+            tx.executeSql(
+              `UPDATE doctors SET
+                name=?, age=?, gender=?, dob=?, 
+                homeAddress=?, area=?, district=?, state=?, pincode=?,
+                phone=?, email=?, hospital=?, specialisation=?, qualification=?, experience=?, license=?
+               WHERE id=?`,
+              [...params, id],
+              (_tx, res) => resolve(res),
+              (_tx, err) => {
+                console.error("SQL UPDATE Error:", err);
+                reject(err || new Error("SQL UPDATE Error"));
+                return true;
+              }
+            );
+          } else {
+            tx.executeSql(
+              `INSERT INTO doctors
+                (name, age, gender, dob, homeAddress, area, district, state, pincode, phone, email, hospital, specialisation, qualification, experience, license)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              params,
+              (_tx, res) => resolve(res),
+              (_tx, err) => {
+                console.error("SQL INSERT Error:", err);
+                reject(err || new Error("SQL INSERT Error"));
+                return true;
+              }
+            );
+          }
+        },
+        (_tx, err) => {
+          console.error("SQL SELECT Error:", err);
+          reject(err || new Error("SQL SELECT Error"));
+          return true;
+        }
+      );
+    }, (err) => {
+      console.error("DB Transaction Error:", err);
+      reject(err || new Error("DB Transaction Error"));
+    });
+  });
+};
+
+export const clearDoctorInfo = () => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql('DELETE FROM doctors', [], (_, res) => resolve(res), (_, err) => reject(err));
     });
   });
 };

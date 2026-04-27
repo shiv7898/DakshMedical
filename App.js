@@ -6,22 +6,27 @@ import { setupDatabase } from './src/api/database';
 import { Colors } from './src/styles/theme';
 import { DataProvider } from './src/context/DataContext';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 const App = () => {
   useEffect(() => {
     setupDatabase();
   }, []);
 
   return (
-    <DataProvider>
-      <NavigationContainer>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
-        <MainNavigation />
-      </NavigationContainer>
-    </DataProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <DataProvider>
+        <NavigationContainer>
+          <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+          <MainNavigation />
+        </NavigationContainer>
+      </DataProvider>
+    </GestureHandlerRootView>
   );
 };
 
 export default App;
+
 
 
 

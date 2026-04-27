@@ -181,45 +181,44 @@ const DashboardScreen = ({ navigation }) => {
         <SafeAreaView style={styles.safeContainer}>
             <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
 
-            {/* Elegant Header - Theme Matched */}
+            {/* Premium Centered Header */}
             <View style={styles.brandHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{
-                        width: 45,
-                        height: 45,
-                        marginRight: 15,
-                        borderRadius: 22.5,
-                        backgroundColor: '#f5f5f5ff',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        elevation: 2, // Slight depth
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.1,
-                        shadowRadius: 2,
-                    }}>
-                        <Image
-                            source={require('../assets/img/logo1.png')}
-                            style={{ width: 30, height: 30 }}
-                            resizeMode="contain"
-                        />
-                    </View>
-                    <View>
+                    <TouchableOpacity
+                        onPress={() => navigation.openDrawer()}
+                        activeOpacity={0.7}
+                        style={styles.profileBtn}
+                    >
+                        <View style={{
+                            width: 45,
+                            height: 45,
+                            borderRadius: 14,
+                            backgroundColor: 'rgba(255,255,255,0.2)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.3)',
+                        }}>
+                            <Icon name="menu" size={26} color="#FFF" />
+                        </View>
+
+                    </TouchableOpacity>
+                    <View style={{ marginLeft: 15 }}>
                         <Text style={styles.brandGreeting}>Patient Dashboard</Text>
                         <Text style={styles.brandName}>{patient?.name || 'User'}</Text>
                     </View>
                 </View>
+
                 <TouchableOpacity
-                    style={[styles.profileBtn, { zIndex: 999 }]}
+                    style={styles.profileBtn}
                     activeOpacity={0.7}
-                    onPress={() => {
-                        console.log('Opening Machine Settings...');
-                        navigation.navigate('UpdateMachineSetting');
-                    }}
+                // onPress={() => navigation.navigate('UpdateMachineSetting')}
                 >
-                    <Icon name="cog" size={24} color="#FFF" />
+                    <Icon name="bell" size={24} color="#FFF" />
                 </TouchableOpacity>
             </View>
+
+
 
             <ScrollView
                 style={styles.container}
@@ -351,13 +350,7 @@ const DashboardScreen = ({ navigation }) => {
                 ))}
             </ScrollView>
 
-            <TouchableOpacity
-                style={styles.modernFab}
-                onPress={() => navigation.navigate('MachineSelection')}
-                activeOpacity={0.9}
-            >
-                <Icon name="plus" size={24} color="#FFF" />
-            </TouchableOpacity>
+
 
             {/* Range Selection Modal */}
             <Modal
@@ -457,9 +450,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.m,
         paddingBottom: 10,
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
-        backgroundColor: Colors.primary, // Deep Medical Green
-        borderBottomLeftRadius: 0,
-        borderBottomRightRadius: 0,
+        backgroundColor: Colors.primary,
         elevation: 8,
     },
     brandGreeting: {
@@ -485,7 +476,10 @@ const styles = StyleSheet.create({
     },
     container: {
         flex: 1,
+        backgroundColor: '#FFFFFF',
     },
+
+
     scrollContent: {
         paddingHorizontal: Spacing.m,
         paddingBottom: 80,
@@ -831,18 +825,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: Colors.textSecondary,
     },
-    modernFab: {
-        position: 'absolute',
-        bottom: 20,
-        right: 15,
-        width: 54,
-        height: 54,
-        borderRadius: 27,
-        backgroundColor: Colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 6,
-    },
+
     emptyCard: {
         backgroundColor: Colors.surface,
         borderRadius: 16,

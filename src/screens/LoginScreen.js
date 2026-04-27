@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const LoginScreen = ({ navigation }) => {
     const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const { setUserRole } = require('../context/DataContext').useData();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [focusField, setFocusField] = useState(null);
@@ -114,10 +115,17 @@ const LoginScreen = ({ navigation }) => {
             return;
         }
 
-        if (username.toLowerCase() === 'doctor@gmail.com' && password === 'Doctor123') {
-            navigation.replace('ProfileSetup', { isSetup: true });
+        if (username.toLowerCase() === 'p' && password === 'p') {
+            setUserRole('patient');
+            navigation.replace('MainTabs');
+        } else if (username.toLowerCase() === 'd' && password === 'd') {
+            setUserRole('doctor');
+            navigation.replace('MainTabs');
+        } else if (username.toLowerCase() === 'a' && password === 'A') {
+            setUserRole('patient');
+            navigation.replace('MainTabs');
         } else {
-            Alert.alert('Access Denied', 'Please check your monitoring credentials and try again.');
+            Alert.alert('Access Denied', 'Please check your monitoring credentials and try again. Use p/p for Patient or d/d for Doctor.');
         }
     };
 
