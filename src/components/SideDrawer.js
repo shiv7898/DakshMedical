@@ -21,23 +21,33 @@ import Animated, {
     interpolate,
     Extrapolate,
 } from 'react-native-reanimated';
-import { Colors, Spacing } from '../styles/theme';
-import { getPatientInfo, clearAllData } from '../api/database';
+import { getPatientInfo, getDoctorInfo, clearAllData } from '../api/database';
+import { useData } from '../context/DataContext';
 
 const { width, height } = Dimensions.get('window');
 
 const SideDrawer = (props) => {
+    const { userData, userRole } = useData();
     const [patient, setPatient] = useState(null);
     const activeRouteIndex = props.state.index;
     const activeRouteName = props.state.routeNames[activeRouteIndex];
 
     useEffect(() => {
-        const fetchPatient = async () => {
-            const data = await getPatientInfo();
+        const fetchUserData = async () => {
+            let data = null;
+            if (userData) {
+                data = userData;
+            } else {
+                if (userRole === 'doctor') {
+                    data = await getDoctorInfo();
+                } else {
+                    data = await getPatientInfo();
+                }
+            }
             setPatient(data);
         };
-        fetchPatient();
-    }, []);
+        fetchUserData();
+    }, [userData, userRole]);
 
     const menuItems = [
         // { label: 'Dashboard', icon: 'view-dashboard-outline', screen: 'Home', color: '#6366F1' },
@@ -101,11 +111,8 @@ const SideDrawer = (props) => {
                         </View>
 
                         <View style={styles.headerInfo}>
-                            {/* <View style={styles.badge}>
-                                <Text style={styles.badgeText}>PRO ACCOUNT</Text>
-                            </View> */}
-                            <Text style={styles.userName}>{patient?.name || 'Authorized User'}</Text>
-                            <Text style={styles.userEmail}>{patient?.email || 'patient.id@airsine.io'}</Text>
+                            <Text style={styles.userName}>{(userData?.name || patient?.name) || 'Authorized User'}</Text>
+                            <Text style={styles.userEmail}>{(userData?.email || patient?.email) || 'user.id@airsine.io'}</Text>
                         </View>
                     </View>
                 </LinearGradient>

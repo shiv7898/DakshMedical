@@ -137,7 +137,7 @@ const CreateUser = ({ navigation }) => {
         }
     };
 
-    const handleCreateAccount = () => {
+    const handleCreateAccount = async () => {
         const { name, email, password, confirmPassword, phone, homeAddress, area, pincode } = formData;
         if (!name || !email || !password || !phone || !homeAddress || !area || !pincode) {
             Alert.alert('Required', 'Please fill all fields.');
@@ -149,49 +149,77 @@ const CreateUser = ({ navigation }) => {
         }
 
         setIsLoading(true);
-        setTimeout(async () => {
-            try {
-                if (formData.role === 'doctor') {
-                    await saveDoctorInfo({
-                        name: formData.name,
-                        email: formData.email,
-                        phone: formData.phone,
-                        age: formData.age,
-                        gender: formData.gender,
-                        dob: formData.dobSelected ? formData.dob.toLocaleDateString() : '',
-                        homeAddress: formData.homeAddress,
-                        area: formData.area,
-                        district: formData.district,
-                        state: formData.state,
-                        pincode: formData.pincode,
-                        hospital: formData.hospital,
-                        specialisation: formData.specialization,
-                        qualification: formData.qualification,
-                        experience: formData.experience
-                    });
-                } else if (formData.role === 'patient') {
-                    await savePatientInfo({
-                        name: formData.name,
-                        email: formData.email,
-                        phone: formData.phone,
-                        age: formData.age,
-                        gender: formData.gender,
-                        dob: formData.dobSelected ? formData.dob.toLocaleDateString() : '',
-                        homeAddress: formData.homeAddress,
-                        area: formData.area,
-                        district: formData.district,
-                        state: formData.state,
-                        pincode: formData.pincode
-                    });
-                }
-                setIsLoading(false);
-                Alert.alert('Success', 'Profile created successfully!', [{ text: 'OK', onPress: () => navigation.goBack() }]);
-            } catch (error) {
-                setIsLoading(false);
-                Alert.alert('Error', 'Failed to save profile locally.');
-                console.error(error);
+
+        try {
+            // 🛠️ BUILD ROLE-SPECIFIC PAYLOAD
+            let payload = {
+                name: formData.name,
+                email: formData.email,
+                phone: formData.phone,
+                role: formData.role,
+                gender: formData.gender,
+                age: formData.age,
+                dob: formData.dobSelected ? formData.dob.toLocaleDateString() : '',
+                homeAddress: formData.homeAddress,
+                area: formData.area,
+                district: formData.district,
+                state: formData.state,
+                pincode: formData.pincode,
+                password: formData.password, // Include if your backend needs it here
+            };
+
+            // Add role-specific data
+            if (formData.role === 'doctor') {
+                payload = {
+                    ...payload,
+                    hospital: formData.hospital,
+                    specialisation: formData.specialization,
+                    qualification: formData.qualification,
+                    experience: formData.experience,
+                };
+            } else if (formData.role === 'distributor') {
+                payload = {
+                    ...payload,
+                    companyName: formData.companyName,
+                    businessType: formData.businessType,
+                    distributorType: formData.distributorType,
+                    licenseNumber: formData.licenseNumber,
+                };
             }
-        }, 1200);
+            // For 'patient', it already has the common fields.
+
+            console.log(`📤 Sending ${formData.role.toUpperCase()} Data to API:`, payload);
+
+            const response = await fetch('http://192.168.14.120:8000/register', {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: {
+                    'Content-type': 'application/json; charset=UTF-8',
+                },
+            });
+
+            const apiData = await response.json();
+            console.log('✅ API Response:', apiData);
+
+            // 💾 Continue with local saving logic
+            if (formData.role === 'doctor') {
+                await saveDoctorInfo(payload); // Using payload as it matches schema
+            } else if (formData.role === 'patient') {
+                await savePatientInfo(payload);
+            }
+
+            setIsLoading(false);
+            Alert.alert(
+                'Success', 
+                `${formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} profile created successfully!`, 
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+
+        } catch (error) {
+            setIsLoading(false);
+            console.error('❌ API/Save Error:', error);
+            Alert.alert('Error', 'Failed to create account.');
+        }
     };
 
     // --- Compact Picker Component ---

@@ -5,9 +5,16 @@ const DataContext = createContext();
 export const DataProvider = ({ children }) => {
     const [selectedRange, setSelectedRange] = useState(7);
     const [userRole, setUserRole] = useState('patient'); // 'patient', 'doctor', or 'distributor'
+    const [token, setToken] = useState(null);
+    const [userData, setUserData] = useState(null);
 
     return (
-        <DataContext.Provider value={{ selectedRange, setSelectedRange, userRole, setUserRole }}>
+        <DataContext.Provider value={{ 
+            selectedRange, setSelectedRange, 
+            userRole, setUserRole,
+            token, setToken,
+            userData, setUserData 
+        }}>
             {children}
         </DataContext.Provider>
     );

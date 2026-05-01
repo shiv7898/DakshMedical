@@ -18,7 +18,7 @@ import {
 import { Colors, Spacing, Typography } from '../styles/theme';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getLogs, getPatientInfo } from '../api/database';
+import { getLogs, getPatientInfo, getDoctorInfo } from '../api/database';
 import { useData } from '../context/DataContext';
 
 const { width } = Dimensions.get('window');
@@ -28,7 +28,7 @@ const DashboardScreen = ({ navigation }) => {
     const [logs, setLogs] = useState([]);
     const [patient, setPatient] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
-    const { selectedRange, setSelectedRange } = useData();
+    const { selectedRange, setSelectedRange, userRole, userData } = useData();
     const [isRangeModalVisible, setIsRangeModalVisible] = useState(false);
     const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
     const [modalConfig, setModalConfig] = useState({ title: '', sub: '', icon: 'database-off', color: '#EF4444' });
@@ -36,11 +36,18 @@ const DashboardScreen = ({ navigation }) => {
 
     const fetchData = async () => {
         try {
-            console.log('Fetching Dashboard Data...');
+            console.log('Fetching Dashboard Data... Role:', userRole);
             const logData = await getLogs();
-            const patientData = await getPatientInfo();
+            
+            let fetchedData = null;
+            if (userRole === 'doctor') {
+                fetchedData = await getDoctorInfo();
+            } else {
+                fetchedData = await getPatientInfo();
+            }
+            
             setLogs(logData);
-            setPatient(patientData || {});
+            setPatient(fetchedData || {});
         } catch (error) {
             console.error(error);
         }
@@ -204,8 +211,8 @@ const DashboardScreen = ({ navigation }) => {
 
                     </TouchableOpacity>
                     <View style={{ marginLeft: 15 }}>
-                        <Text style={styles.brandGreeting}>Patient Dashboard</Text>
-                        <Text style={styles.brandName}>{patient?.name || 'User'}</Text>
+                        <Text style={styles.brandGreeting}>User Dashboard</Text>
+                        <Text style={styles.brandName}>{(userData?.name || patient?.name) || 'User'}</Text>
                     </View>
                 </View>
 

@@ -15,20 +15,23 @@ import {
     Animated,
     Image,
     useWindowDimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { Colors } from '../styles/theme';
 import { User, Lock, ArrowRight, ShieldCheck } from 'lucide-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { savePatientInfo, saveDoctorInfo } from '../api/database';
 
 const LoginScreen = ({ navigation }) => {
     const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
     const insets = useSafeAreaInsets();
-    const { setUserRole } = require('../context/DataContext').useData();
+    const { setUserRole, setToken, setUserData } = require('../context/DataContext').useData();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [focusField, setFocusField] = useState(null);
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -109,26 +112,147 @@ const LoginScreen = ({ navigation }) => {
         };
     }, []);
 
-    const handleLogin = () => {
-        if (!username || !password) {
-            Alert.alert('Incomplete Credentials', 'Please enter your username and password to continue.');
-            return;
-        }
+    // const handleLogin = async () => {
+    //     if (!username || !password) {
+    //         Alert.alert('Incomplete Credentials', 'Please enter your username and password to continue.');
+    //         return;
+    //     }
 
-        if (username.toLowerCase() === 'p' && password === 'p') {
-            setUserRole('patient');
-            navigation.replace('MainTabs');
-        } else if (username.toLowerCase() === 'd' && password === 'd') {
-            setUserRole('doctor');
-            navigation.replace('MainTabs');
-        } else if (username.toLowerCase() === 'a' && password === 'A') {
-            setUserRole('patient');
-            navigation.replace('MainTabs');
-        } else {
-            Alert.alert('Access Denied', 'Please check your monitoring credentials and try again. Use p/p for Patient or d/d for Doctor.');
-        }
-    };
+    //     setLoading(true);
 
+    //     try {
+    //         // --- DUMMY API CALL START ---
+    //         // Simulating a POST request to an authentication endpoint
+    //         const ApiUrl = 'http://192.168.14.120:8000/login'; // Placeholder URL
+    //         const payload = {
+    //             username: username,
+    //             password: password,
+    //             timestamp: new Date().toISOString(),
+    //             device: Platform.OS
+    //         };
+
+    //         console.log('--- EXECUTING DUMMY API CALL ---');
+    //         console.log('URL:', ApiUrl);
+    //         console.log('Payload:', payload);
+
+    //         const response = await fetch(ApiUrl, {
+    //             method: 'POST',
+    //             headers: {
+    //                 'Content-Type': 'application/json',
+    //             },
+    //             body: JSON.stringify(payload),
+    //         });
+
+    //         const data = await response.json();
+    //         console.log('Dummy API Response:', data);
+    //         // --- DUMMY API CALL END ---
+
+    //         // Simulate network latency
+    //         await new Promise(resolve => setTimeout(resolve, 1500));
+
+    //         // Logic to determine role based on dummy credentials or local bypass
+    //         if (username.toLowerCase() === 'p' && password === 'p') {
+    //             setUserRole('patient');
+    //             navigation.replace('MainTabs');
+    //         } else if (username.toLowerCase() === 'd' && password === 'd') {
+    //             setUserRole('doctor');
+    //             navigation.replace('MainTabs');
+    //         } else if (username.toLowerCase() === 'a' && password === 'A') {
+    //             setUserRole('patient');
+    //             navigation.replace('MainTabs');
+    //         } else {
+    //             // For dummy purposes, let's allow any login if we want, or keep strict check
+    //             // Here we keep the existing check but inform about API success
+    //             Alert.alert('Access Denied', 'API Authenticated successfully (Mock), but role mapping failed. Use p/p for Patient or d/d for Doctor.');
+    //         }
+    //     } catch (error) {
+    //         console.error('API Error:', error);
+    //         Alert.alert('Connection Error', 'Failed to reach the authentication server. Please try again later.');
+    //     } finally {
+    //         setLoading(false);
+    //     }
+    // };
+const handleLogin = async () => {
+  if (!username || !password) {
+    Alert.alert('Error', 'Please enter email and password');
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    // LOGIN API
+    const loginResponse = await fetch('http://192.168.14.120:8000/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: username,     // input field email use ho raha hai
+        password: password,
+      }),
+    });
+
+    const loginData = await loginResponse.json();
+
+    console.log('Login Response =>', loginData);
+
+    if (!loginResponse.ok) {
+      Alert.alert('Login Failed', loginData.detail || 'Invalid Credentials');
+      return;
+    }
+
+    // TOKEN + ROLE
+    const token = loginData.access_token;
+    const role = loginData.role;
+
+    global.token = token;
+    setToken(token); // Save to context
+    setUserRole(role);
+
+    // FETCH FULL PROFILE DATA USING THE CONSISTENT ENDPOINT
+    const profileResponse = await fetch('http://192.168.14.120:8000/get-profile', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const profileData = await profileResponse.json();
+
+    console.log('Role API Response =>', profileData);
+
+    if (!profileResponse.ok) {
+      Alert.alert('Error', profileData.detail || 'Unauthorized');
+      return;
+    }
+
+    // DATA SAVE KARNA HO TO KAR SAKTE HO
+    global.userData = profileData;
+    setUserData(profileData); // Save to context for immediate UI update
+
+    // PERSIST TO LOCAL DATABASE
+    try {
+      if (role === 'doctor') {
+        await saveDoctorInfo(profileData);
+      } else {
+        await savePatientInfo(profileData);
+      }
+    } catch (dbError) {
+      console.log('DB SAVE ERROR =>', dbError);
+    }
+
+    // NEXT SCREEN
+    navigation.replace('MainTabs');
+
+  } catch (error) {
+    console.log('API ERROR =>', error);
+    Alert.alert('Error', 'Server not responding');
+  } finally {
+    setLoading(false);
+  }
+};
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -234,11 +358,22 @@ const LoginScreen = ({ navigation }) => {
                                         <Text style={styles.forgotPassText}>Forgot Password?</Text>
                                     </TouchableOpacity>
 
-                                    <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8}>
-                                        <Text style={styles.loginButtonText}>AUTHENTICATE</Text>
-                                        <View style={styles.buttonIcon}>
-                                            <ArrowRight size={18} color="#FFF" />
-                                        </View>
+                                    <TouchableOpacity 
+                                        style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
+                                        onPress={handleLogin} 
+                                        activeOpacity={0.8}
+                                        disabled={loading}
+                                    >
+                                        {loading ? (
+                                            <ActivityIndicator color="#FFF" size="small" />
+                                        ) : (
+                                            <>
+                                                <Text style={styles.loginButtonText}>AUTHENTICATE</Text>
+                                                <View style={styles.buttonIcon}>
+                                                    <ArrowRight size={18} color="#FFF" />
+                                                </View>
+                                            </>
+                                        )}
                                     </TouchableOpacity>
                                 </View>
 
@@ -429,6 +564,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 10,
         elevation: 6,
+    },
+    loginButtonDisabled: {
+        opacity: 0.8,
+        backgroundColor: '#64748B',
     },
     loginButtonText: {
         color: '#FFFFFF',

@@ -157,7 +157,8 @@ const scStyles = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const ProfileScreen = ({ navigation, route }) => {
-    const { setSelectedRange, userRole } = useData();
+    const { setSelectedRange, userRole, setUserData } = useData();
+    
     const isSetup = route?.params?.isSetup || false;
     const [isEditing, setIsEditing] = useState(isSetup);
     const [loading, setLoading] = useState(true);
@@ -221,17 +222,51 @@ const ProfileScreen = ({ navigation, route }) => {
     const loadProfileData = async () => {
         setLoading(true);
         try {
-            if (userRole === 'doctor') {
-                const data = await getDoctorInfo();
-                if (data) setProfileData(data);
-                else if (isSetup) setIsEditing(true);
+            // Check if we have a token
+            const token = global.token;
+            if (!token) {
+                console.warn('No token found, trying local data...');
+                // Fallback to local data if no token
+                const localData = userRole === 'doctor' ? await getDoctorInfo() : await getPatientInfo();
+                if (localData) setProfileData(localData);
+                setLoading(false);
+                return;
+            }
+
+            console.log('--- FETCHING PROFILE FROM SERVER ---');
+            const response = await fetch('http://192.168.14.120:8000/get-profile', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const data = await response.json();
+            console.log('Profile API Response:', data);
+
+            if (response.ok) {
+                // If the server returns data, use it
+                setProfileData(data);
+                setUserData(data); // Sync to context
+                
+                // Optionally save to local database for offline access
+                if (userRole === 'doctor') {
+                    await saveDoctorInfo(data);
+                } else {
+                    await savePatientInfo(data);
+                }
             } else {
-                const data = await getPatientInfo();
-                if (data) setProfileData(data);
-                else if (isSetup) setIsEditing(true);
+                console.error('Failed to fetch profile from server:', data.detail);
+                // Fallback to local data
+                const localData = userRole === 'doctor' ? await getDoctorInfo() : await getPatientInfo();
+                if (localData) setProfileData(localData);
             }
         } catch (e) {
             console.error('Failed to load profile data:', e);
+            // Fallback to local data
+            const localData = userRole === 'doctor' ? await getDoctorInfo() : await getPatientInfo();
+            if (localData) setProfileData(localData);
         }
         setLoading(false);
     };
@@ -251,6 +286,7 @@ const ProfileScreen = ({ navigation, route }) => {
             if (isSetup) {
                 navigation.replace('MainTabs');
             } else {
+                setUserData(profileData); // Sync to context after save
                 setIsEditing(false);
                 Alert.alert('✅ Saved', 'Profile updated successfully.');
             }
