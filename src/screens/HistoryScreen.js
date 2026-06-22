@@ -117,7 +117,7 @@ const HistoryScreen = () => {
                         </View>
                         <View style={styles.metricsRow}>
                             <MetricItem label="Avg Press" value={item.pressure_avg} unit="cm" color={Colors.text} />
-                            <MetricItem label="Resp Rate" value={item.avg_resp_rate || '--'} unit="/m" color={Colors.text} />
+                            <MetricItem label="Resp Rate" value={item?.avg_resp_rate || '--'} unit="/m" color={Colors.text} />
                         </View>
                     </View>
                 </View>

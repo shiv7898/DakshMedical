@@ -7,13 +7,15 @@ export const DataProvider = ({ children }) => {
     const [userRole, setUserRole] = useState('patient'); // 'patient', 'doctor', or 'distributor'
     const [token, setToken] = useState(null);
     const [userData, setUserData] = useState(null);
+    const [selectedModes, setSelectedModes] = useState([]);
 
     return (
         <DataContext.Provider value={{ 
             selectedRange, setSelectedRange, 
             userRole, setUserRole,
             token, setToken,
-            userData, setUserData 
+            userData, setUserData,
+            selectedModes, setSelectedModes
         }}>
             {children}
         </DataContext.Provider>

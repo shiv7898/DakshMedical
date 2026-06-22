@@ -11,7 +11,9 @@ import {
     Dimensions,
     Platform,
     StatusBar,
+    Switch,
 } from 'react-native';
+import RNHTMLtoPDF from 'react-native-html-to-pdf';
 import * as DocumentPicker from '@react-native-documents/picker';
 import RNFS from 'react-native-fs';
 import { Colors, Spacing, Typography } from '../styles/theme';
@@ -19,12 +21,18 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { parseCSV } from '../utils/csvParser';
 // import { insertLog } from '../api/database';
 import { recreateLogsTableWithData } from '../api/database';
+import { useData } from '../context/DataContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const ImportLogScreen = ({ route, navigation }) => {
     const { machineType } = route.params;
     const [loading, setLoading] = useState(false);
+    const [availableModes, setAvailableModes] = useState([]);
+    const { selectedModes, setSelectedModes } = useData();
+    const [showModesModal, setShowModesModal] = useState(false);
+    const [parsedDataState, setParsedDataState] = useState([]);
+    const [importSummaryText, setImportSummaryText] = useState('');
 
     const handleSkip = () => {
         navigation.navigate('MainTabs');
@@ -71,18 +79,32 @@ const ImportLogScreen = ({ route, navigation }) => {
 
             await recreateLogsTableWithData(formattedData);
 
-            setLoading(false);
+            setParsedDataState(parsedData);
             const importCount = parsedData.length;
-            const summaryTitle = importCount > 1 ? 'Batch Import Successful' : 'Import Successful';
             const summaryMsg = importCount > 1
                 ? `${importCount} days of clinical therapy data processed.\n\nDate Range: ${parsedData[importCount - 1].date} to ${parsedData[0].date}`
                 : `Clinical data for ${parsedData[0].date} has been processed.\n\nUsage: ${parsedData[0].usage_hours} hrs\nAHI: ${parsedData[0].ahi}`;
+            setImportSummaryText(summaryMsg);
 
-            Alert.alert(
-                summaryTitle,
-                summaryMsg,
-                [{ text: 'Dashboard', onPress: () => navigation.navigate('MainTabs') }]
-            );
+            // Determine unique therapy modes present in the logs, excluding 'MIXED'
+            const modesSet = new Set();
+            parsedData.forEach(item => {
+                if (item.modes_used_today && item.modes_used_today.length > 0) {
+                    item.modes_used_today.forEach(m => {
+                        const mode = m.trim().toUpperCase();
+                        if (mode !== 'MIXED') modesSet.add(mode);
+                    });
+                } else if (item.therapy_type) {
+                    const mode = item.therapy_type.trim().toUpperCase();
+                    if (mode !== 'MIXED') {
+                        modesSet.add(mode);
+                    }
+                }
+            });
+            const modesArray = Array.from(modesSet);
+            setAvailableModes(modesArray);
+            setSelectedModes(modesArray); // pre-select all available modes
+            setShowModesModal(true); // Open the custom selection modal instead of simple Alert.alert
         } catch (err) {
             setLoading(false);
 
@@ -157,15 +179,53 @@ const ImportLogScreen = ({ route, navigation }) => {
                         </TouchableOpacity>
                     )}
 
-                    <View style={styles.infoCard}>
-                        <Icon name="shield-check-outline" size={22} color={Colors.primary} />
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text style={styles.infoTitle}>Secure Analysis</Text>
-                            <Text style={styles.infoText}>
-                                Data is processed locally on your device for maximum privacy.
-                            </Text>
+                    {/* Therapy Modes Selection Overlay */}
+                    {showModesModal && (
+                        <View style={[StyleSheet.absoluteFillObject, styles.modalOverlay]}>
+                            <View style={styles.modalCard}>
+                                <Text style={styles.modalTitle}>Batch Import Successful</Text>
+                                <Text style={styles.modalSubtitle}>{importSummaryText}</Text>
+                                <Text style={styles.selectHeader}>Select Therapy Modes to Include in PDF Summary:</Text>
+                                <ScrollView style={{ maxHeight: 200, marginBottom: 15 }}>
+                                    {availableModes.map((mode, idx) => (
+                                        <View key={idx} style={styles.modeItem}>
+                                            <Text style={styles.modeLabel}>{mode}</Text>
+                                            <Switch
+                                                value={selectedModes.includes(mode)}
+                                                onValueChange={() => {
+                                                    setSelectedModes(prev =>
+                                                        prev.includes(mode)
+                                                            ? prev.filter(m => m !== mode)
+                                                            : [...prev, mode]
+                                                    );
+                                                }}
+                                            />
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                                <TouchableOpacity 
+                                    style={styles.confirmButton} 
+                                    onPress={async () => {
+                                        try {
+                                            // Format selected modes as JSON/String to store or pass, but navigate to dashboard directly.
+                                            // Update database patient/logs preference with selected modes if necessary, or pass via state.
+                                            console.log('Selected modes to save:', selectedModes);
+                                            
+                                            // Navigate directly to Dashboard
+                                            setShowModesModal(false);
+                                            navigation.navigate('MainTabs');
+                                        } catch (err) {
+                                            console.error('Error in saving selected modes:', err);
+                                            setShowModesModal(false);
+                                            navigation.navigate('MainTabs');
+                                        }
+                                    }}
+                                >
+                                    <Text style={styles.confirmButtonText}>Save & Go to Dashboard</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
+                    )}
 
                     <TouchableOpacity style={styles.helpLink}>
                         <Text style={styles.helpText}>Need help finding your log file?</Text>
@@ -293,6 +353,82 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontSize: 13,
         fontWeight: '600',
+    },
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999,
+        padding: 20,
+    },
+    modalCard: {
+        width: '100%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.primary,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginBottom: 16,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    selectHeader: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.text,
+        marginBottom: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+        paddingTop: 12,
+    },
+    modeItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EDF2F7',
+    },
+    modeLabel: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: Colors.text,
+    },
+    confirmButton: {
+        backgroundColor: Colors.primary,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 10,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    confirmButtonText: {
+        color: '#FFFFFF',
+        fontWeight: 'bold',
+        fontSize: 16,
     },
 });
 

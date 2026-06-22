@@ -69,6 +69,21 @@ export const setupDatabase = () => {
         low_pressure_count INTEGER DEFAULT 0,
         compliance_percent REAL DEFAULT 0,
         machine_type TEXT,
+        meas_pressure_min REAL DEFAULT 0,
+        meas_pressure_max REAL DEFAULT 0,
+        cpap_pressure REAL DEFAULT 0,
+        i_pap REAL DEFAULT 0,
+        e_pap REAL DEFAULT 0,
+        i_trigger REAL DEFAULT 0,
+        e_trigger REAL DEFAULT 0,
+        p_rise REAL DEFAULT 0,
+        ti_min REAL DEFAULT 0,
+        ti_max REAL DEFAULT 0,
+        breath_rate REAL DEFAULT 0,
+        ie_ratio REAL DEFAULT 0,
+        vt REAL DEFAULT 0,
+        ipap_max REAL DEFAULT 0,
+        ipap_min REAL DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`, []
     );
@@ -78,6 +93,13 @@ export const setupDatabase = () => {
     );
     tx.executeSql(
       'INSERT OR IGNORE INTO users (id, username, password) VALUES (1, "d", "1")',
+      []
+    );
+    tx.executeSql(
+      `CREATE TABLE IF NOT EXISTS machine_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )`,
       []
     );
   },
@@ -167,6 +189,21 @@ export const recreateLogsTableWithData = (logsArray) => {
           low_pressure_count INTEGER DEFAULT 0,
           compliance_percent REAL DEFAULT 0,
           machine_type TEXT,
+          meas_pressure_min REAL DEFAULT 0,
+          meas_pressure_max REAL DEFAULT 0,
+          cpap_pressure REAL DEFAULT 0,
+          i_pap REAL DEFAULT 0,
+          e_pap REAL DEFAULT 0,
+          i_trigger REAL DEFAULT 0,
+          e_trigger REAL DEFAULT 0,
+          p_rise REAL DEFAULT 0,
+          ti_min REAL DEFAULT 0,
+          ti_max REAL DEFAULT 0,
+          breath_rate REAL DEFAULT 0,
+          ie_ratio REAL DEFAULT 0,
+          vt REAL DEFAULT 0,
+          ipap_max REAL DEFAULT 0,
+          ipap_min REAL DEFAULT 0,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`
       );
@@ -181,8 +218,9 @@ export const recreateLogsTableWithData = (logsArray) => {
            pressure_min, pressure_max, pressure_avg, ramp_start_pressure, pressure_off, ramp_duration,
            avg_flow, leak_rate, large_leak_percent, avg_resp_rate,
            ahi, cai, oai, apnea_count, obstructive_count, central_count,
-           hypopnea_count, mask_fault_count, mask_off_count, low_pressure_count, compliance_percent, machine_type)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           hypopnea_count, mask_fault_count, mask_off_count, low_pressure_count, compliance_percent, machine_type,
+           meas_pressure_min, meas_pressure_max, cpap_pressure, i_pap, e_pap, i_trigger, e_trigger, p_rise, ti_min, ti_max, breath_rate, ie_ratio, vt, ipap_max, ipap_min)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             logData.patient_id ?? 1,
             logData.date,
@@ -211,6 +249,21 @@ export const recreateLogsTableWithData = (logsArray) => {
             logData.low_pressure_count ?? 0,
             logData.compliance_percent ?? 0,
             logData.machine_type ?? 'CPAP',
+            logData.meas_pressure_min ?? 0,
+            logData.meas_pressure_max ?? 0,
+            logData.cpap_pressure ?? 0,
+            logData.i_pap ?? 0,
+            logData.e_pap ?? 0,
+            logData.i_trigger ?? 0,
+            logData.e_trigger ?? 0,
+            logData.p_rise ?? 0,
+            logData.ti_min ?? 0,
+            logData.ti_max ?? 0,
+            logData.breath_rate ?? 0,
+            logData.ie_ratio ?? 0,
+            logData.vt ?? 0,
+            logData.ipap_max ?? 0,
+            logData.ipap_min ?? 0,
           ]
         );
       });
@@ -441,7 +494,22 @@ export const clearAllData = () => {
           mask_off_count INTEGER DEFAULT 0,
           low_pressure_count INTEGER DEFAULT 0,
           compliance_percent REAL DEFAULT 0,
-          machine_type TEXT DEFAULT 'CPAP'
+          machine_type TEXT DEFAULT 'CPAP',
+          meas_pressure_min REAL DEFAULT 0,
+          meas_pressure_max REAL DEFAULT 0,
+          cpap_pressure REAL DEFAULT 0,
+          i_pap REAL DEFAULT 0,
+          e_pap REAL DEFAULT 0,
+          i_trigger REAL DEFAULT 0,
+          e_trigger REAL DEFAULT 0,
+          p_rise REAL DEFAULT 0,
+          ti_min REAL DEFAULT 0,
+          ti_max REAL DEFAULT 0,
+          breath_rate REAL DEFAULT 0,
+          ie_ratio REAL DEFAULT 0,
+          vt REAL DEFAULT 0,
+          ipap_max REAL DEFAULT 0,
+          ipap_min REAL DEFAULT 0
         )`
       );
     }, (err) => {
@@ -547,6 +615,48 @@ export const clearDoctorInfo = () => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
       tx.executeSql('DELETE FROM doctors', [], (_, res) => resolve(res), (_, err) => reject(err));
+    });
+  });
+};
+
+export const saveMachineSettings = (settingsData) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `INSERT OR REPLACE INTO machine_settings (key, value) VALUES (?, ?)`,
+        ['last_uploaded_settings', JSON.stringify(settingsData)],
+        (_, res) => resolve(res),
+        (_, err) => {
+          console.error("SQL saveMachineSettings Error:", err);
+          reject(err);
+        }
+      );
+    });
+  });
+};
+
+export const getMachineSettings = () => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT value FROM machine_settings WHERE key = ?`,
+        ['last_uploaded_settings'],
+        (_, results) => {
+          if (results.rows.length > 0) {
+            try {
+              resolve(JSON.parse(results.rows.item(0).value));
+            } catch (e) {
+              resolve(null);
+            }
+          } else {
+            resolve(null);
+          }
+        },
+        (_, error) => {
+          console.error("SQL getMachineSettings Error:", error);
+          reject(error);
+        }
+      );
     });
   });
 };

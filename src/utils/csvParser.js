@@ -1,10 +1,7 @@
+// src/utils/csvParser.js
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-
-/**
- * Get YYYY-MM-DD string from Date
- */
 const dateKey = (d) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -12,112 +9,149 @@ const dateKey = (d) => {
     return `${y}-${m}-${day}`;
 };
 
-/**
- * Percentile value from a sorted numeric array
- */
-const percentile = (sorted, pct) => {
-    if (sorted.length === 0) return 0;
-    const idx = Math.min(Math.floor(sorted.length * pct), sorted.length - 1);
-    return sorted[idx];
-};
-
-// ─── new-format detector ─────────────────────────────────────────────────────
-
-const parseTimestampColon = (ts) => {
-    if (!ts) return null;
-    const parts = String(ts).trim().split(':');
-    if (parts.length !== 2) return null;
-    const dStr = parts[0];
-    const tStr = parts[1];
-    if (dStr.length !== 8 || tStr.length !== 6) return null;
-    const year = parseInt(dStr.slice(0, 4), 10);
-    const month = parseInt(dStr.slice(4, 6), 10) - 1;
-    const day = parseInt(dStr.slice(6, 8), 10);
-    const hour = parseInt(tStr.slice(0, 2), 10);
-    const min = parseInt(tStr.slice(2, 4), 10);
-    const sec = parseInt(tStr.slice(4, 6), 10);
+const parseTimestamp = (ts) => {
+    if (!ts || ts.length !== 14) return null;
+    const year = parseInt(ts.slice(0, 4), 10);
+    const month = parseInt(ts.slice(4, 6), 10) - 1;
+    const day = parseInt(ts.slice(6, 8), 10);
+    const hour = parseInt(ts.slice(8, 10), 10);
+    const min = parseInt(ts.slice(10, 12), 10);
+    const sec = parseInt(ts.slice(12, 14), 10);
     const d = new Date(year, month, day, hour, min, sec);
     return isNaN(d.getTime()) ? null : d;
 };
 
-const isUltraNewDeviceFormat = (rawText) => {
-    const lines = rawText.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length === 0) return false;
-    const firstLine = lines[0].trim();
-    const cols = firstLine.split(',');
-    if (cols.length < 6) return false;
-    const ts = cols[0].trim();
-    return /^\d{8}:\d{6}$/.test(ts);
+const MODE_MAP = {
+    1: 'CPAP',
+    2: 'APAP',
+    3: 'S',
+    4: 'T',
+    5: 'ST',
+    6: 'VAPS',
 };
 
+// ─── new-format parser ────────────────────────────────────────────────────
 
-// ─── ultra-new-format parser ────────────────────────────────────────────────────
-
-const parseUltraNewDeviceFormat = (rawText) => {
+const parseNewLogFormat = (rawText) => {
     const lines = rawText.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return [];
 
     const rows = [];
     for (const line of lines) {
-        const cols = line.split(',');
-        if (cols.length < 6) continue;
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 13) continue; // Min length for CPAP/T mode
 
-        const startTs = parseTimestampColon(cols[0].trim());
-        const endTs = parseTimestampColon(cols[1].trim());
-        if (!startTs || !endTs) continue;
+        const tsStr = parts[0];
+        const timeVal = parseTimestamp(tsStr);
+        if (!timeVal) continue;
 
-        const therapyDetails = cols[3].trim().split(':');
-        const avgData = cols[4].trim().split(':');
-        const eventCounts = cols[5].trim().split(':');
+        const status = parseInt(parts[1], 10);
+        // Only process rows where therapy is ON (status === 1)
+        if (status !== 1) continue;
 
-        let mode = parseInt(therapyDetails[0], 10); // 1 = CPAP, 2 = APAP
-        let cpapPressure = 0, minPressure = 0, maxPressure = 0;
-        let rampStartPressure = 0, pressureOff = 0, rampDuration = 0;
+        const mode = parseInt(parts[2], 10);
+        if (!MODE_MAP[mode]) continue;
 
-        if (mode === 1 && therapyDetails.length >= 5) {
-            rampStartPressure = (parseFloat(therapyDetails[1]) || 0) / 10;
-            cpapPressure = (parseFloat(therapyDetails[2]) || 0) / 10;
-            pressureOff = parseInt(therapyDetails[3], 10) || 0;
-            rampDuration = parseInt(therapyDetails[4], 10) || 0;
-        } else if (mode === 2 && therapyDetails.length >= 6) {
-            rampStartPressure = (parseFloat(therapyDetails[1]) || 0) / 10;
-            minPressure = (parseFloat(therapyDetails[2]) || 0) / 10;
-            maxPressure = (parseFloat(therapyDetails[3]) || 0) / 10;
-            pressureOff = parseInt(therapyDetails[4], 10) || 0;
-            rampDuration = parseInt(therapyDetails[5], 10) || 0;
-        } else {
-            // Fallback
-            cpapPressure = (parseFloat(therapyDetails[2] || 0)) / 10;
+        let currentIndex = 3;
+        
+        let rampStartP = 0, cpapP = 0, pOff = 0, rampDur = 0;
+        let minP = 0, maxP = 0;
+        let iPap = 0, ePap = 0, iTrigger = 0, eTrigger = 0, pRise = 0, tiMin = 0, tiMax = 0;
+        let breathRate = 0, ieRatio = 0, iPapMax = 0, iPapMin = 0, vt = 0;
+
+        const readNext = () => currentIndex < (parts.length - 7) ? parseFloat(parts[currentIndex++]) : 0;
+
+        switch (mode) {
+            case 1: // CPAP
+                rampStartP = readNext();
+                cpapP = readNext();
+                pOff = readNext();
+                rampDur = readNext();
+                break;
+            case 2: // APAP
+                rampStartP = readNext();
+                minP = readNext();
+                maxP = readNext();
+                pOff = readNext();
+                rampDur = readNext();
+                break;
+            case 3: // S
+                iPap = readNext();
+                ePap = readNext();
+                iTrigger = readNext();
+                eTrigger = readNext();
+                pRise = readNext();
+                tiMin = readNext();
+                tiMax = readNext();
+                break;
+            case 4: // T
+                iPap = readNext();
+                ePap = readNext();
+                breathRate = readNext();
+                ieRatio = readNext();
+                pRise = readNext();
+                break;
+            case 5: // ST
+                iPap = readNext();
+                ePap = readNext();
+                breathRate = readNext();
+                ieRatio = readNext();
+                iTrigger = readNext();
+                eTrigger = readNext();
+                pRise = readNext();
+                tiMax = readNext();
+                tiMin = readNext();
+                break;
+            case 6: // VAPS
+                iPapMax = readNext();
+                iPapMin = readNext();
+                ePap = readNext();
+                vt = readNext();
+                breathRate = readNext();
+                ieRatio = readNext();
+                iTrigger = readNext();
+                eTrigger = readNext();
+                pRise = readNext();
+                break;
         }
 
-        const avgFlow = parseFloat(avgData[0]) || 0;
-        const avgLeak = parseFloat(avgData[1]) || 0;
-        const avgRespRate = parseFloat(avgData[2]) || 0;
-        const apneaCountRow = parseInt(avgData[3], 10) || 0;
-
-        const openMaskCountRow = parseInt(eventCounts[0], 10) || 0;
-        const lowPressureCountRow = parseInt(eventCounts[1], 10) || 0;
-
-        let durationSec = (endTs.getTime() - startTs.getTime()) / 1000;
-        if (durationSec < 0) durationSec = 0;
-        // Edge case: if start and end are exactly the same, maybe it's 1 sec event or 0 sec
-        if (durationSec === 0) durationSec = 1;
+        currentIndex = parts.length - 7;
+        const setAvgP = parseFloat(parts[currentIndex++]);
+        const measAvgP = parseFloat(parts[currentIndex++]);
+        const avgLeak = parseFloat(parts[currentIndex++]);
+        const actualRespRate = parseFloat(parts[currentIndex++]) || 0; // 4th from last
+        const apneaStatus = parseInt(parts[currentIndex++], 10);
+        const apneaType = parseInt(parts[currentIndex++], 10);
+        const maskOpen = parseInt(parts[currentIndex++], 10);
 
         rows.push({
-            startTs,
-            durationSec,
+            timeVal,
             mode,
-            cpapPressure,
-            minPressure,
-            maxPressure,
-            rampStartPressure,
-            pressureOff,
-            rampDuration,
-            avgFlow,
+            rampStartP,
+            cpapP,
+            minP,
+            maxP,
+            pOff,
+            rampDur,
+            iPap,
+            ePap,
+            iTrigger,
+            eTrigger,
+            pRise,
+            tiMin,
+            tiMax,
+            breathRate,
+            ieRatio,
+            vt,
+            iPapMax,
+            iPapMin,
+            setAvgP,
+            measAvgP,
             avgLeak,
-            avgRespRate,
-            apneaCountRow,
-            openMaskCountRow,
-            lowPressureCountRow
+            apneaStatus,
+            apneaType,
+            maskOpen,
+            actualRespRate
         });
     }
 
@@ -125,7 +159,7 @@ const parseUltraNewDeviceFormat = (rawText) => {
 
     const byDate = {};
     for (const row of rows) {
-        const key = dateKey(row.startTs);
+        const key = dateKey(row.timeVal);
         if (!byDate[key]) byDate[key] = [];
         byDate[key].push(row);
     }
@@ -135,133 +169,143 @@ const parseUltraNewDeviceFormat = (rawText) => {
     for (const date of Object.keys(byDate).sort()) {
         const dayRows = byDate[date];
 
-        let totalDurationSec = 0;
-        let sumFlow = 0;
-        let sumLeak = 0;
-        let validLeakRowsCount = 0;
-        let sumRespRate = 0;
-        let totalApneaCount = 0;
-        let totalOpenMask = 0;
-        let totalLowPressure = 0;
-        let cpapCount = 0;
-        let apapCount = 0;
+        const totalMinutes = dayRows.length;
+        const usageHours = parseFloat((totalMinutes / 60).toFixed(2));
 
-        let maxP = 0;
-        let minP = 999;
-        let sumP = 0;
-        let validPRows = 0;
+        let sumMeasAvgP = 0, dayMaxP = 0, dayMinP = 999;
+        let sumSetAvgP = 0, sumLeak = 0, validLeakCount = 0, sumRespRate = 0, validRespRateCount = 0;
+        let apneas = 0, obstructives = 0, centrals = 0, hypopneas = 0, openMasks = 0;
 
-        let rampStartPressureDay = 0;
-        let pressureOffDay = 0;
-        let rampDurationDay = 0;
+        let cpapCount = 0, apapCount = 0, sCount = 0, tCount = 0, stCount = 0, vapsCount = 0;
+        let dominantModeStr = 'CPAP';
+        const modeFrequency = {};
+
+        let sumMinP = 0, sumMaxP = 0, sumRampStart = 0, sumPOff = 0, sumRampDur = 0;
+        let sumIPap = 0, sumEPap = 0, sumITrigger = 0, sumETrigger = 0, sumPRise = 0;
+        let sumTiMin = 0, sumTiMax = 0, sumBreathRate = 0, sumIERatio = 0, sumVt = 0;
+        let sumIPapMax = 0, sumIPapMin = 0, sumCpapP = 0;
+        let validModeSettingsCount = 0;
 
         for (const r of dayRows) {
-            totalDurationSec += r.durationSec;
-            sumFlow += r.avgFlow;
+            sumMeasAvgP += r.measAvgP;
+            if (r.measAvgP > dayMaxP) dayMaxP = r.measAvgP;
+            if (r.measAvgP < dayMinP) dayMinP = r.measAvgP;
             
-            // Filter leak > 200 for clinical accuracy
+            sumSetAvgP += r.setAvgP;
+
             if (r.avgLeak < 200) {
                 sumLeak += r.avgLeak;
-                validLeakRowsCount++;
-            }
-            
-            sumRespRate += r.avgRespRate;
-            totalApneaCount += r.apneaCountRow;
-            totalOpenMask += r.openMaskCountRow;
-            totalLowPressure += r.lowPressureCountRow;
-
-            if (r.mode === 1) {
-                cpapCount++;
-                const p = r.cpapPressure;
-                if (p > 0) {
-                    if (p > maxP) maxP = p;
-                    if (p < minP) minP = p;
-                    sumP += p;
-                    validPRows++;
-                }
-            } else if (r.mode === 2) {
-                apapCount++;
-                const p = (r.minPressure + r.maxPressure) / 2;
-                if (r.maxPressure > maxP) maxP = r.maxPressure;
-                if (r.minPressure < minP) minP = r.minPressure;
-                sumP += p;
-                validPRows++;
+                validLeakCount++;
             }
 
-            if (r.rampStartPressure > 0) rampStartPressureDay = r.rampStartPressure;
-            if (r.rampDuration > 0) rampDurationDay = r.rampDuration;
-            if (r.pressureOff !== undefined) pressureOffDay = r.pressureOff;
+            const currentResp = r.actualRespRate > 0 ? r.actualRespRate : (r.breathRate || 0);
+            if (currentResp > 0) {
+                sumRespRate += currentResp;
+                validRespRateCount++;
+            }
+
+            if (r.apneaStatus === 1) {
+                apneas++;
+                if (r.apneaType === 1) obstructives++;
+                else if (r.apneaType === 2) centrals++;
+                else hypopneas++;
+            }
+
+            openMasks += r.maskOpen;
+
+            const modeName = MODE_MAP[r.mode];
+            modeFrequency[modeName] = (modeFrequency[modeName] || 0) + 1;
+
+            if (r.mode === 1) cpapCount++;
+            else if (r.mode === 2) apapCount++;
+            else if (r.mode === 3) sCount++;
+            else if (r.mode === 4) tCount++;
+            else if (r.mode === 5) stCount++;
+            else if (r.mode === 6) vapsCount++;
+
+            validModeSettingsCount++;
+            sumRampStart += r.rampStartP || 0;
+            sumPOff += r.pOff || 0;
+            sumRampDur += r.rampDur || 0;
+            sumMinP += r.minP || 0;
+            sumMaxP += r.maxP || 0;
+            sumCpapP += r.cpapP || 0;
+            sumIPap += r.iPap || 0;
+            sumEPap += r.ePap || 0;
+            sumITrigger += r.iTrigger || 0;
+            sumETrigger += r.eTrigger || 0;
+            sumPRise += r.pRise || 0;
+            sumTiMin += r.tiMin || 0;
+            sumTiMax += r.tiMax || 0;
+            sumBreathRate += r.breathRate || 0;
+            sumIERatio += r.ieRatio || 0;
+            sumVt += r.vt || 0;
+            sumIPapMax += r.iPapMax || 0;
+            sumIPapMin += r.iPapMin || 0;
         }
+        console.log("sumRespRate" ,sumRespRate,"validRespRateCount",validRespRateCount,"avg_resp_rate",avgRespRateDay)
 
-        const usageHours = parseFloat((totalDurationSec / 3600).toFixed(2));
+        const modesUsed = Object.keys(modeFrequency);
+        const therapyType = modesUsed.length > 0 ? modesUsed.join(', ') : 'CPAP';
 
-        const rowCount = dayRows.length;
-        const avgFlowDay = rowCount > 0 ? parseFloat((sumFlow / rowCount).toFixed(2)) : 0;
-        const avgLeakDay = validLeakRowsCount > 0 ? parseFloat((sumLeak / validLeakRowsCount).toFixed(2)) : 0;
-        const avgRespRateDay = rowCount > 0 ? parseFloat((sumRespRate / rowCount).toFixed(2)) : 0;
-        const pressureAvg = validPRows > 0 ? parseFloat((sumP / validPRows).toFixed(2)) : 0;
-        const pressureMin = minP === 999 ? 0 : minP;
-        const pressureMax = maxP;
+        const avgMeasP = totalMinutes > 0 ? parseFloat((sumMeasAvgP / totalMinutes).toFixed(2)) : 0;
+        const avgSetP = totalMinutes > 0 ? parseFloat((sumSetAvgP / totalMinutes).toFixed(2)) : 0;
+        const finalMinP = dayMinP === 999 ? 0 : parseFloat(dayMinP.toFixed(2));
+        const finalMaxP = parseFloat(dayMaxP.toFixed(2));
 
-        const ahi = usageHours > 0 ? parseFloat((totalApneaCount / usageHours).toFixed(2)) : 0;
+        const avgLeakDay = validLeakCount > 0 ? parseFloat((sumLeak / validLeakCount).toFixed(2)) : 0;
+        const avgRespRateDay = validRespRateCount > 0 ? parseFloat((sumRespRate / validRespRateCount).toFixed(2)) : 0;
 
-        // Mixed = both CPAP and APAP sessions present on same day
-        let therapyType;
-        if (cpapCount > 0 && apapCount > 0) {
-            therapyType = 'Mixed';
-        } else if (apapCount > 0) {
-            therapyType = 'APAP';
-        } else {
-            therapyType = 'CPAP';
-        }
-
+        const ahi = usageHours > 0 ? parseFloat((apneas / usageHours).toFixed(2)) : 0;
+        const oai = usageHours > 0 ? parseFloat((obstructives / usageHours).toFixed(2)) : 0;
+        const cai = usageHours > 0 ? parseFloat((centrals / usageHours).toFixed(2)) : 0;
         const compliancePercent = usageHours >= 4 ? 100 : 0;
-        console.log(
-            "date", date,
-            "usage_hours", usageHours,
-            "therapy_type", therapyType,
-            "avg_set_pressure", pressureAvg,
-            "pressure_min", pressureMin,
-            "pressure_max", pressureMax,
-            "pressure_avg", pressureAvg,
-            "ramp_start_pressure", rampStartPressureDay,
-            "pressure_off", pressureOffDay,
-            "ramp_duration", rampDurationDay,
-            "avg_flow", avgFlowDay,
-            "leak_rate", avgLeakDay,
 
-            "avg_resp_rate", avgRespRateDay,
-            "ahi", ahi,
-
-            "apnea_count", totalApneaCount,
-            "totalOpenMask", totalOpenMask,
-
-            "compliance_percent", compliancePercent,
-        )
+        const cpapApapCount = cpapCount + apapCount;
+        const bilevelCount = sCount + tCount + stCount + vapsCount;
 
         summaries.push({
             date,
             usage_hours: usageHours,
             therapy_type: therapyType,
-            avg_set_pressure: pressureAvg,
-            pressure_min: pressureMin,
-            pressure_max: pressureMax,
-            pressure_avg: pressureAvg,
-            ramp_start_pressure: rampStartPressureDay,
-            pressure_off: pressureOffDay,
-            ramp_duration: rampDurationDay,
-
-            avg_flow: avgFlowDay,
+            avg_set_pressure: avgSetP,
+            pressure_min: apapCount > 0 ? parseFloat((sumMinP / apapCount).toFixed(2)) : 0,
+            pressure_max: apapCount > 0 ? parseFloat((sumMaxP / apapCount).toFixed(2)) : 0,
+            meas_pressure_min: finalMinP,
+            meas_pressure_max: finalMaxP,
+            pressure_avg: avgMeasP,
+            ramp_start_pressure: cpapApapCount > 0 ? parseFloat((sumRampStart / cpapApapCount).toFixed(2)) : 0,
+            pressure_off: cpapApapCount > 0 ? parseFloat((sumPOff / cpapApapCount).toFixed(2)) : 0,
+            ramp_duration: cpapApapCount > 0 ? parseFloat((sumRampDur / cpapApapCount).toFixed(2)) : 0,
+            i_pap: bilevelCount > 0 ? parseFloat((sumIPap / bilevelCount).toFixed(2)) : 0,
+            e_pap: bilevelCount > 0 ? parseFloat((sumEPap / bilevelCount).toFixed(2)) : 0,
+            i_trigger: (sCount + stCount + vapsCount) > 0 ? parseFloat((sumITrigger / (sCount + stCount + vapsCount)).toFixed(2)) : 0,
+            e_trigger: (sCount + stCount + vapsCount) > 0 ? parseFloat((sumETrigger / (sCount + stCount + vapsCount)).toFixed(2)) : 0,
+            p_rise: bilevelCount > 0 ? parseFloat((sumPRise / bilevelCount).toFixed(2)) : 0,
+            ti_min: (sCount + stCount) > 0 ? parseFloat((sumTiMin / (sCount + stCount)).toFixed(2)) : 0,
+            ti_max: (sCount + stCount) > 0 ? parseFloat((sumTiMax / (sCount + stCount)).toFixed(2)) : 0,
+            breath_rate: (tCount + stCount + vapsCount) > 0 ? parseFloat((sumBreathRate / (tCount + stCount + vapsCount)).toFixed(2)) : 0,
+            ie_ratio: (tCount + stCount + vapsCount) > 0 ? parseFloat((sumIERatio / (tCount + stCount + vapsCount)).toFixed(2)) : 0,
+            vt: vapsCount > 0 ? parseFloat((sumVt / vapsCount).toFixed(2)) : 0,
+            ipap_max: vapsCount > 0 ? parseFloat((sumIPapMax / vapsCount).toFixed(2)) : 0,
+            ipap_min: vapsCount > 0 ? parseFloat((sumIPapMin / vapsCount).toFixed(2)) : 0,
+            cpap_pressure: cpapCount > 0 ? parseFloat((sumCpapP / cpapCount).toFixed(2)) : 0,
+            avg_flow: 0, 
             leak_rate: avgLeakDay,
-            // large_leak_percent: 0,
+            large_leak_percent: 0,
             avg_resp_rate: avgRespRateDay,
             ahi,
-            // cai: 0,
-            // oai: 0,
-            apnea_count: totalApneaCount,
-            mask_fault_count: totalOpenMask,
-            low_pressure_count: totalLowPressure,
+            cai,
+            oai,
+            apnea_count: apneas,
+            obstructive_count: obstructives,
+            central_count: centrals,
+            hypopnea_count: hypopneas,
+            mask_fault_count: openMasks,
+            mask_off_count: 0,
+            low_pressure_count: 0,
             compliance_percent: compliancePercent,
+            modes_used_today: Object.keys(modeFrequency), 
         });
     }
 
@@ -276,18 +320,13 @@ export const parseCSV = (fileContent) => {
                 return;
             }
 
-            if (isUltraNewDeviceFormat(fileContent)) {
-                console.log('✅ Detected device log format');
-                const summaries = parseUltraNewDeviceFormat(fileContent);
-                if (summaries && summaries.length > 0) {
-                    resolve(summaries);
-                } else {
-                    reject(new Error('Device logs found but no active therapy session detected.'));
-                }
-                return;
+            console.log('✅ Parsing device log format');
+            const summaries = parseNewLogFormat(fileContent);
+            if (summaries && summaries.length > 0) {
+                resolve(summaries);
+            } else {
+                reject(new Error('Device logs found but no active therapy session detected.'));
             }
-
-            reject(new Error('Unrecognized device log format. Please ensure you are importing valid Airsine CPAP logs.'));
         } catch (e) {
             reject(e || new Error('Unexpected error in parseCSV'));
         }

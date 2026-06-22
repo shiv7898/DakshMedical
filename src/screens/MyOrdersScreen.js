@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
@@ -9,9 +9,16 @@ import {
     StatusBar,
     Platform,
     Image,
+    ActivityIndicator,
+    RefreshControl,
+    Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors } from '../styles/theme';
+import { useData } from '../context/DataContext';
+import { useFocusEffect } from '@react-navigation/native';
+import { BASE_URL, ENDPOINTS } from '../api/apiConfig';
+
 
 const MOCK_ORDERS = [
     {
@@ -44,7 +51,76 @@ const MOCK_ORDERS = [
 ];
 
 const MyOrdersScreen = ({ navigation }) => {
-    const [orders, setOrders] = useState(MOCK_ORDERS);
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const { token } = useData();
+
+    const fetchOrders = async (isRefreshing = false) => {
+        try {
+            if (!isRefreshing) setLoading(true);
+            
+            console.log('📦 Fetching My Orders...');
+            const response = await fetch(ENDPOINTS.MY_ORDERS, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const result = await response.json();
+            console.log('✅ My Orders Data:', result);
+
+            if (response.ok && result.data) {
+                const transformed = result.data.map(order => {
+                    let imageUrl = null;
+                    if (order.product_image) {
+                        const cleanFileName = order.product_image.startsWith('/') ? order.product_image.slice(1) : order.product_image;
+                        if (cleanFileName.includes('uploads/')) {
+                            imageUrl = `${BASE_URL}/${cleanFileName}`;
+                        } else {
+                            imageUrl = `${BASE_URL}/uploads/products/${cleanFileName}`;
+                        }
+                    }
+
+                    return {
+                        id: (order.order_id || order.id || "").toString(),
+                        productName: order.product_name,
+                        type: order.product_type,
+                        date: (order.order_date || order.created_at || "").split('T')[0],
+                        price: order.unit_price,
+                        quantity: order.quantity,
+                        totalAmount: order.total_amount,
+                        discountAmount: order.discount_amount,
+                        finalAmount: order.final_amount,
+                        referralCode: order.referral_code,
+                        status: order.status || 'PENDING',
+                        image: imageUrl,
+                    };
+                });
+
+                setOrders(transformed);
+            }
+        } catch (error) {
+            console.error('❌ Fetch Orders Error:', error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchOrders();
+        }, [])
+    );
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchOrders(true);
+    };
+
 
     const getStatusStyle = (status) => {
         switch (status) {
@@ -81,16 +157,37 @@ const MyOrdersScreen = ({ navigation }) => {
                 </View>
 
                 <View style={styles.cardBody}>
-                    <View style={styles.productIconBox}>
-                        <Icon name="air-filter" size={30} color={Colors.primary} />
-                    </View>
+                    {item.image ? (
+                        <Image
+                            source={{ uri: item.image }}
+                            style={styles.productImage}
+                        />
+                    ) : (
+                        <View style={styles.productIconBox}>
+                            <Icon name="air-filter" size={30} color={Colors.primary} />
+                        </View>
+                    )}
                     <View style={styles.productDetails}>
                         <Text style={styles.productName}>{item.productName}</Text>
                         <Text style={styles.productMeta}>{item.type} • {item.quantity} Unit{item.quantity > 1 ? 's' : ''}</Text>
                     </View>
                     <View style={styles.priceDetails}>
                         <Text style={styles.priceLabel}>Total Amount</Text>
-                        <Text style={styles.priceValue}>{'\u20B9'}{(item.price * item.quantity).toLocaleString()}</Text>
+                        <Text style={styles.priceValue}>
+                            {'\u20B9'}
+                            {(item.finalAmount !== undefined && item.finalAmount !== null
+                                ? item.finalAmount
+                                : item.price * item.quantity
+                            ).toLocaleString()}
+                        </Text>
+                        {item.discountAmount > 0 ? (
+                            <View style={styles.discountBadgeMini}>
+                                <Icon name="tag" size={10} color="#10B981" />
+                                <Text style={styles.discountBadgeMiniText}>
+                                    Saved {'\u20B9'}{item.discountAmount.toLocaleString()}
+                                </Text>
+                            </View>
+                        ) : null}
                     </View>
                 </View>
 
@@ -121,26 +218,37 @@ const MyOrdersScreen = ({ navigation }) => {
                 <View style={{ width: 44 }} />
             </View>
 
-            <FlatList
-                data={orders}
-                renderItem={renderOrderItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContainer}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Icon name="shopping-search" size={80} color="#E2E8F0" />
-                        <Text style={styles.emptyTitle}>No Orders Yet</Text>
-                        <Text style={styles.emptySubtitle}>Your medical supply orders will appear here.</Text>
-                        <TouchableOpacity 
-                            style={styles.shopBtn}
-                            onPress={() => navigation.navigate('ProductCatalog')}
-                        >
-                            <Text style={styles.shopBtnText}>Browse Catalog</Text>
-                        </TouchableOpacity>
-                    </View>
-                }
-            />
+            {loading && !refreshing ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <Text style={styles.loadingText}>Fetching your orders...</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={orders}
+                    renderItem={renderOrderItem}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={styles.listContainer}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Icon name="shopping-search" size={80} color="#E2E8F0" />
+                            <Text style={styles.emptyTitle}>No Orders Yet</Text>
+                            <Text style={styles.emptySubtitle}>Your medical supply orders will appear here.</Text>
+                            <TouchableOpacity 
+                                style={styles.shopBtn}
+                                onPress={() => navigation.navigate('ProductCatalog')}
+                            >
+                                <Text style={styles.shopBtnText}>Browse Catalog</Text>
+                            </TouchableOpacity>
+                        </View>
+                    }
+                />
+            )}
+
         </SafeAreaView>
     );
 };
@@ -155,7 +263,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: Colors.primary,
         paddingHorizontal: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+        // paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 1 : 20,
+
         paddingBottom: 16,
         elevation: 8,
     },
@@ -238,6 +348,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#F1F5F9',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    productImage: {
+        width: 50,
+        height: 50,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        resizeMode: 'contain',
     },
     productDetails: {
         flex: 1,
@@ -331,6 +448,36 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '800',
     },
+    discountBadgeMini: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ECFDF5',
+        borderColor: '#A7F3D0',
+        borderWidth: 0.5,
+        borderRadius: 4,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        marginTop: 3,
+        alignSelf: 'flex-end',
+        gap: 3,
+    },
+    discountBadgeMiniText: {
+        color: '#059669',
+        fontSize: 9,
+        fontWeight: '700',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 14,
+        color: '#64748B',
+        fontWeight: '600',
+    },
 });
+
 
 export default MyOrdersScreen;

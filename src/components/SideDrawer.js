@@ -9,6 +9,7 @@ import {
     Alert,
     Platform,
     StatusBar,
+    Clipboard,
 } from 'react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -23,6 +24,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { getPatientInfo, getDoctorInfo, clearAllData } from '../api/database';
 import { useData } from '../context/DataContext';
+import { Colors } from '../styles/theme';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,16 +52,29 @@ const SideDrawer = (props) => {
         fetchUserData();
     }, [userData, userRole]);
 
-    const menuItems = [
-        // { label: 'Dashboard', icon: 'view-dashboard-outline', screen: 'Home', color: '#6366F1' },
-        { label: 'Product Catalog', icon: 'shopping-outline', screen: 'ProductCatalog', color: '#8B5CF6' },
-        { label: 'Add Machine', icon: 'plus-circle-outline', screen: 'AddMachine', color: '#EC4899' },
+    const getMenuItems = () => {
+        if (userRole === 'distributor') {
+            return [
+                { label: 'Dashboard', icon: 'view-dashboard-outline', screen: 'DistributorHome', color: '#10B981' },
+                { label: 'Product Catalog', icon: 'shopping-outline', screen: 'ProductCatalog', color: '#8B5CF6' },
+                { label: 'Business Reports', icon: 'chart-bar', screen: 'DistributorReports', color: '#F59E0B' },
+                { label: 'Help & Support', icon: 'help-circle-outline', screen: 'SupportQuery', color: '#3B82F6' },
+                { label: 'Stock Orders', icon: 'package-variant-closed', screen: 'MyOrders', color: '#6366F1' },
+            ];
+        }
+        return [
+            { label: 'Product Catalog', icon: 'shopping-outline', screen: 'ProductCatalog', color: '#8B5CF6' },
+            { label: 'Add Machine', icon: 'plus-circle-outline', screen: 'AddMachine', color: '#EC4899' },
+            { label: 'Cloud Analysis', icon: 'chart-box-outline', screen: 'Graphs', color: '#10B981' },
+            { label: 'Machine Settings', icon: 'cog-outline', screen: 'UpdateMachineSetting', color: '#F59E0B' },
+            { label: 'Help & Support', icon: 'help-circle-outline', screen: 'SupportQuery', color: '#3B82F6' },
+            { label: 'My Orders', icon: 'package-variant-closed', screen: 'MyOrders', color: '#6366F1' },
+            { label: 'Download PDF', icon: 'file-download-outline', screen: 'DownloadPdf', color: '#EF4444' },
+        ];
+    };
 
-        { label: 'Cloud Analysis', icon: 'chart-box-outline', screen: 'Graphs', color: '#10B981' },
-        { label: 'Machine Settings', icon: 'cog-outline', screen: 'UpdateMachineSetting', color: '#F59E0B' },
-        { label: 'Help & Support', icon: 'help-circle-outline', screen: 'SupportQuery', color: '#3B82F6' },
-        { label: 'My Orders', icon: 'package-variant-closed', screen: 'MyOrders', color: '#6366F1' },
-    ];
+    const menuItems = getMenuItems();
+
 
     const handleLogout = () => {
         Alert.alert(
@@ -82,6 +98,25 @@ const SideDrawer = (props) => {
         );
     };
 
+    // Use actual referral_code from profile data
+    const referralCode = userData?.referral_code || patient?.referral_code || '—';
+
+    const handleCopyReferral = () => {
+        if (referralCode === '—') return;
+        Clipboard.setString(referralCode);
+        Alert.alert('✅ Copied!', `Referral code "${referralCode}" copied to clipboard.`);
+    };
+
+    // Role label & color
+    const getRoleInfo = () => {
+        switch (userRole) {
+            case 'doctor': return { label: 'Doctor', color: '#3B82F6', bg: 'rgba(59,130,246,0.18)', icon: 'stethoscope' };
+            case 'distributor': return { label: 'Distributor', color: '#F59E0B', bg: 'rgba(245,158,11,0.18)', icon: 'store-outline' };
+            default: return { label: 'Patient', color: '#10B981', bg: 'rgba(16,185,129,0.18)', icon: 'account-heart-outline' };
+        }
+    };
+    const roleInfo = getRoleInfo();
+
     return (
         <View style={styles.container}>
             {/* High-End Vector Background Pattern Mockup using Gradients */}
@@ -90,15 +125,32 @@ const SideDrawer = (props) => {
                 <View style={[styles.orb, { bottom: -100, right: -50, backgroundColor: '#47776a22' }]} />
             </View>
 
-            {/* Profile Header Block */}
+            {/* ── Modern Profile Header ── */}
             <View style={styles.headerWrapper}>
                 <LinearGradient
-                    colors={['#518276', '#47776a']}
+                    colors={['#2D5049', '#518276', '#47776a']}
                     style={styles.headerCard}
                     start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+                    end={{ x: 1, y: 1.2 }}
                 >
-                    <View style={styles.glassOverlay} />
+                    {/* Top-left shimmer */}
+                    <View style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: '45%',
+                        borderTopLeftRadius: 20, borderTopRightRadius: 20,
+                        backgroundColor: 'rgba(255,255,255,0.06)',
+                    }} />
+
+                    {/* Decorative circles */}
+                    <View style={{ position: 'absolute', top: -20, right: -20, width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                    <View style={{ position: 'absolute', bottom: -30, left: -10, width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+
+                    {/* Role Badge — top-right corner */}
+                    <View style={[styles.roleBadgeCorner, { backgroundColor: roleInfo.bg, borderColor: roleInfo.color + '55' }]}>
+                        <Icon name={roleInfo.icon} size={10} color={'#FFFFFF'} />
+                        <Text style={[styles.roleText, { color: '#FFFFFF' }]}>{roleInfo.label}</Text>
+                    </View>
+
+                    {/* Avatar + Name + Email (compact single block) */}
                     <View style={styles.profileContainer}>
                         <View style={styles.avatarGlow}>
                             <View style={styles.avatarContainer}>
@@ -111,10 +163,38 @@ const SideDrawer = (props) => {
                         </View>
 
                         <View style={styles.headerInfo}>
-                            <Text style={styles.userName}>{(userData?.name || patient?.name) || 'Authorized User'}</Text>
-                            <Text style={styles.userEmail}>{(userData?.email || patient?.email) || 'user.id@airsine.io'}</Text>
+                            {/* Name */}
+                            <Text style={styles.userName} numberOfLines={1}>
+                                {(userData?.name || patient?.name) || 'Authorized User'}
+                            </Text>
+
+                            {/* Email inline with Gmail icon */}
+                            <View style={styles.emailInlineRow}>
+                                <View style={styles.gmailIconWrap}>
+                                    <Icon name="gmail" size={10} color="#EA4335" />
+                                </View>
+                                <Text style={styles.userEmail} numberOfLines={1}>
+                                    {(userData?.email || patient?.email) || 'id not found'}
+                                </Text>
+                            </View>
                         </View>
                     </View>
+
+                    {/* Referral Code */}
+                    <TouchableOpacity
+                        style={styles.referralRow}
+                        onPress={handleCopyReferral}
+                        activeOpacity={0.75}
+                    >
+                        <View style={styles.referralLeft}>
+                            <Icon name="ticket-percent-outline" size={13} color="rgba(255,255,255,0.7)" />
+                            <Text style={styles.referralLabel}>Ref. Code</Text>
+                        </View>
+                        <View style={styles.referralCodeWrap}>
+                            <Text style={styles.referralCode}>{referralCode}</Text>
+                            <Icon name="content-copy" size={12} color="#10B981" style={{ marginLeft: 5 }} />
+                        </View>
+                    </TouchableOpacity>
                 </LinearGradient>
             </View>
 
@@ -233,18 +313,20 @@ const styles = StyleSheet.create({
         opacity: 0.15,
     },
     headerWrapper: {
-        paddingTop: Platform.OS === 'ios' ? 40 : 25,
-        paddingHorizontal: 16,
-        paddingBottom: 0, // Gap removed
+        paddingTop: Platform.OS === 'ios' ? 44 : (StatusBar.currentHeight || 24) + 10,
+        paddingHorizontal: 12,
+        paddingBottom: 0,
     },
     headerCard: {
-        borderRadius: 16,
+        borderRadius: 18,
         padding: 12,
-        elevation: 10,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
+        elevation: 12,
+        shadowColor: '#2D5049',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
         shadowRadius: 12,
+        overflow: 'hidden',
+        
     },
     profileContainer: {
         flexDirection: 'row',
@@ -253,22 +335,24 @@ const styles = StyleSheet.create({
     },
     avatarGlow: {
         padding: 3,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: 'rgba(255,255,255,0.25)',
         borderRadius: 35,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
     },
     avatarContainer: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         backgroundColor: '#f6f4f4ff',
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 8,
     },
     avatar: {
-        width: 30,
-        height: 30,
-        borderRadius: 50
+        width: 32,
+        height: 32,
+        borderRadius: 50,
     },
     headerInfo: {
         marginLeft: 12,
@@ -278,22 +362,96 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '900',
+        letterSpacing: 0.3,
+    },
+    roleBadgeCorner: {
+        position: 'absolute',
+        top: 4,
+        right: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 20,
+        borderWidth: 1,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        gap: 4,
+        zIndex: 10,
+    },
+    roleText: {
+        fontSize: 7,
+        fontWeight: '800',
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+    },
+    emailInlineRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 3,
+        gap: 4,
+    },
+    gmailIconWrap: {
+        width: 16,
+        height: 16,
+        borderRadius: 4,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     userEmail: {
-        color: 'rgba(255,255,255,0.85)',
+        color: 'rgba(255,255,255,0.8)',
         fontSize: 10,
-        marginTop: -2,
         fontWeight: '500',
+        flex: 1,
+    },
+    referralRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(0,0,0,0.18)',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginTop: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+    },
+    referralLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    referralLabel: {
+        color: 'rgba(255,255,255,0.65)',
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.4,
+        textTransform: 'uppercase',
+    },
+    referralCodeWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(16,185,129,0.15)',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(16,185,129,0.35)',
+    },
+    referralCode: {
+        color: '#10B981',
+        fontSize: 12,
+        fontWeight: '900',
+        letterSpacing: 1,
     },
 
 
     scrollContent: {
-        paddingHorizontal: 16,
-        paddingTop: 0, // Ensure no padding at top
+        paddingHorizontal: 12,
+        paddingTop: 0,
     },
     menuTitleContainer: {
-        marginTop: 15, // Controlled gap
-        marginBottom: 8,
+        marginTop: 10,
+        marginBottom: 6,
         paddingLeft: 4,
     },
     menuSectionTitle: {

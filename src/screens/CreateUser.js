@@ -46,6 +46,8 @@ import {
     Map
 } from 'lucide-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { ENDPOINTS } from '../api/apiConfig';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { savePatientInfo, saveDoctorInfo } from '../api/database';
 
@@ -151,20 +153,33 @@ const CreateUser = ({ navigation }) => {
         setIsLoading(true);
 
         try {
+            const toNumericOrString = (val) => {
+                if (val === null || val === undefined || val === '') return val;
+                const str = String(val).trim();
+                if (!str) return '';
+                if (/^\d+$/.test(str)) {
+                    return parseInt(str, 10);
+                }
+                if (/^\d*\.\d+$/.test(str)) {
+                    return parseFloat(str);
+                }
+                return val;
+            };
+
             // 🛠️ BUILD ROLE-SPECIFIC PAYLOAD
             let payload = {
                 name: formData.name,
                 email: formData.email,
-                phone: formData.phone,
+                phone: toNumericOrString(formData.phone),
                 role: formData.role,
                 gender: formData.gender,
-                age: formData.age,
+                age: toNumericOrString(formData.age),
                 dob: formData.dobSelected ? formData.dob.toLocaleDateString() : '',
                 homeAddress: formData.homeAddress,
                 area: formData.area,
                 district: formData.district,
                 state: formData.state,
-                pincode: formData.pincode,
+                pincode: toNumericOrString(formData.pincode),
                 password: formData.password, // Include if your backend needs it here
             };
 
@@ -175,7 +190,7 @@ const CreateUser = ({ navigation }) => {
                     hospital: formData.hospital,
                     specialisation: formData.specialization,
                     qualification: formData.qualification,
-                    experience: formData.experience,
+                    experience: toNumericOrString(formData.experience),
                 };
             } else if (formData.role === 'distributor') {
                 payload = {
@@ -183,15 +198,16 @@ const CreateUser = ({ navigation }) => {
                     companyName: formData.companyName,
                     businessType: formData.businessType,
                     distributorType: formData.distributorType,
-                    licenseNumber: formData.licenseNumber,
+                    licenseNumber: toNumericOrString(formData.licenseNumber),
                 };
             }
             // For 'patient', it already has the common fields.
 
             console.log(`📤 Sending ${formData.role.toUpperCase()} Data to API:`, payload);
 
-            const response = await fetch('http://192.168.14.120:8000/register', {
+            const response = await fetch(ENDPOINTS.REGISTER, {
                 method: 'POST',
+
                 body: JSON.stringify(payload),
                 headers: {
                     'Content-type': 'application/json; charset=UTF-8',

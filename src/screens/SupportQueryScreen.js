@@ -29,9 +29,13 @@ import {
 } from 'lucide-react-native';
 import { Colors } from '../styles/theme';
 
+import { useData } from '../context/DataContext';
+import { ENDPOINTS } from '../api/apiConfig';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SupportQueryScreen = ({ navigation }) => {
+    const { userData, token } = useData();
     const [formData, setFormData] = useState({
         query: '',
         category: 'General',
@@ -45,36 +49,54 @@ const SupportQueryScreen = ({ navigation }) => {
         setFormData(prev => ({ ...prev, [key]: value }));
     };
 
-    const handleSendQuery = () => {
+    const handleSendQuery = async () => {
         if (!formData.query.trim()) return;
         setIsSubmitting(true);
 
-        // API READY PAYLOAD
-        const apiPayload = {
-            userId: 'USER_12345', // Replace with real auth user ID
-            category: formData.category,
-            message: formData.query.trim(),
-            attachments: formData.attachments.map(a => ({
-                uri: a.uri,
-                type: 'image/jpeg', // Standard type
-                name: `query_image_${Date.now()}.jpg`
-            })),
-            timestamp: new Date().toISOString(),
-            platform: Platform.OS,
-        };
+        try {
+            const data = new FormData();
+            data.append('category', formData.category);
+            data.append('message', formData.query.trim());
+            data.append('platform', Platform.OS);
 
-        console.log('Sending to Backend:', apiPayload);
+            if (formData.attachments.length > 0) {
+                const file = formData.attachments[0];
+                data.append('image', {
+                    uri: file.uri,
+                    name: file.name || 'image.jpg',
+                    type: file.type || 'image/jpeg',
+                });
+            }
 
-        // Simulate API call
-        setTimeout(() => {
-            setIsSubmitting(false);
-            setFormData({
-                query: '',
-                category: 'General',
-                attachments: [],
+            console.log('Sending Query to Backend (Patient):', data);
+
+            const response = await fetch(ENDPOINTS.SUPPORT_QUERY, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: data,
             });
-            alert('Query Sent Successfully! Our team will contact you soon.');
-        }, 1500);
+
+            const result = await response.json();
+            console.log('API Response:', result);
+
+            if (response.ok) {
+                setFormData({
+                    query: '',
+                    category: 'General',
+                    attachments: [],
+                });
+                alert(result.message || 'Query Sent Successfully! Our team will contact you soon.');
+            } else {
+                alert('Failed to send query. Please try again.');
+            }
+        } catch (error) {
+            console.error('API Error:', error);
+            alert('Network error. Please check your connection.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handlePickImage = async () => {
@@ -88,7 +110,15 @@ const SupportQueryScreen = ({ navigation }) => {
                 mode: 'open',
             });
             if (result) {
-                const newAttachments = [...formData.attachments, { id: Date.now().toString(), uri: result.uri }];
+                const newAttachments = [
+                    ...formData.attachments, 
+                    { 
+                        id: Date.now().toString(), 
+                        uri: result.uri, 
+                        name: result.name || result.fileName || `image_${Date.now()}.jpg`, 
+                        type: result.type || result.mimeType || 'image/jpeg' 
+                    }
+                ];
                 updateForm('attachments', newAttachments);
             }
         } catch (err) {
@@ -244,7 +274,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: Colors.primary,
         paddingHorizontal: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+        // paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+                paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 1 : 20,
+        
         paddingBottom: 10,
         elevation: 8,
     },

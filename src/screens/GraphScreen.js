@@ -91,9 +91,16 @@ const GraphScreen = ({ navigation }) => {
         if (!l.date) return '';
         const parts = l.date.split('-');
         if (parts.length >= 3) {
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const monthIdx = parseInt(parts[1], 10) - 1;
-            const month = (monthIdx >= 0 && monthIdx < 12) ? months[monthIdx] : parts[1];
+            return `${parts[2]}`;
+        }
+        return l.date;
+    });
+
+    const reversedLogsAll = [...logs].slice(0, selectedRange || logs.length).reverse();
+    const datesAll = reversedLogsAll.map(l => {
+        if (!l.date) return '';
+        const parts = l.date.split('-');
+        if (parts.length >= 3) {
             return `${parts[2]}`;
         }
         return l.date;
@@ -113,7 +120,75 @@ const GraphScreen = ({ navigation }) => {
             </View>
 
             <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-                <Text style={styles.infoText}>Detailed metrics for the last 7 therapy sessions.</Text>
+                <Text style={styles.infoText}>Detailed metrics for the selected therapy sessions.</Text>
+
+                {/* 1. Daily Usage Hours Chart */}
+                <View style={styles.chartCard}>
+                    <View style={styles.chartHeader}>
+                        <Icon name="clock-time-four-outline" size={18} color={Colors.primary} />
+                        <Text style={styles.chartLabel}>Daily Usage (Hours)</Text>
+                    </View>
+                    <View style={{ position: 'relative' }}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <LineChart
+                                data={{
+                                    labels: datesAll,
+                                    datasets: [{
+                                        data: reversedLogsAll.map(l => parseFloat(l.usage_hours) || 0),
+                                    }]
+                                }}
+                                width={Math.max(width - Spacing.m * 4, datesAll.length * 25)}
+                                height={200}
+                                chartConfig={chartConfig}
+                                formatYLabel={(value) => Number(value).toFixed(1)}
+                                bezier={datesAll.length > 1}
+                                style={styles.chart}
+                                withInnerLines={true}
+                                onDataPointClick={(data) => handleDataPointClick(data, 3)} // Index 3 for tooltip
+                                renderDotContent={({ x, y, index, indexData }) => {
+                                    const isLow = indexData < 4;
+                                    const isNearTop = y < 30;
+                                    return (
+                                        <View key={index} style={{ position: 'absolute', top: y, left: x, zIndex: 100 }}>
+                                            <Text style={{ 
+                                                position: 'absolute', 
+                                                top: isNearTop ? 8 : -20, 
+                                                left: -15, 
+                                                width: 30, 
+                                                textAlign: 'center',
+                                                fontSize: 9, 
+                                                color: isLow ? '#EF4444' : '#10B981', 
+                                                fontWeight: 'bold' 
+                                            }}>
+                                                ({Number(indexData).toFixed(1)})
+                                            </Text>
+                                            {isLow && (
+                                                <View style={{
+                                                    position: 'absolute',
+                                                    top: -5,
+                                                    left: -5,
+                                                    width: 10,
+                                                    height: 10,
+                                                    borderRadius: 5,
+                                                    backgroundColor: '#EF4444',
+                                                    borderWidth: 1.5,
+                                                    borderColor: '#FFF'
+                                                }} />
+                                            )}
+                                        </View>
+                                    );
+                                }}
+                            />
+                        </ScrollView>
+                        {tooltipPos.visible && tooltipPos.chartIndex === 3 && (
+                            <View style={[styles.tooltipOverlay, { left: tooltipPos.x - 20, top: tooltipPos.y - 35 }]}>
+                                <Text style={styles.tooltipText}>
+                                    {Number(tooltipPos.value).toFixed(1)}h
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
 
                 {/* 1. Pressure vs Time Chart */}
                 {/* <View style={styles.chartCard}>
@@ -630,7 +705,7 @@ const styles = StyleSheet.create({
     chartHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 15,
     },
     chartLabel: {
         fontSize: 13,
@@ -639,7 +714,7 @@ const styles = StyleSheet.create({
         marginLeft: 6,
     },
     chart: {
-        marginVertical: 5,
+        marginVertical: 15,
         borderRadius: 12,
         marginLeft: -15,
     },

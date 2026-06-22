@@ -18,6 +18,8 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { ENDPOINTS } from '../api/apiConfig';
+
 import { Colors, Spacing, Typography } from '../styles/theme';
 import { getPatientInfo, savePatientInfo, clearPatientInfo, clearLogs, getDoctorInfo, saveDoctorInfo, clearDoctorInfo, clearAllData } from '../api/database';
 import { useData } from '../context/DataContext';
@@ -157,8 +159,9 @@ const scStyles = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const ProfileScreen = ({ navigation, route }) => {
-    const { setSelectedRange, userRole, setUserData } = useData();
-    
+    const { setSelectedRange, userRole, setUserData, token } = useData();
+
+
     const isSetup = route?.params?.isSetup || false;
     const [isEditing, setIsEditing] = useState(isSetup);
     const [loading, setLoading] = useState(true);
@@ -186,12 +189,50 @@ const ProfileScreen = ({ navigation, route }) => {
 
     // Avatar initials animation
     const avatarScale = useRef(new Animated.Value(1)).current;
+    const scrollY = useRef(new Animated.Value(0)).current;
+
     const pulseAvatar = () => {
         Animated.sequence([
             Animated.spring(avatarScale, { toValue: 1.08, useNativeDriver: true }),
             Animated.spring(avatarScale, { toValue: 1, useNativeDriver: true }),
         ]).start();
     };
+
+    const heroOpacity = scrollY.interpolate({
+        inputRange: [0, 150],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+    });
+
+    const heroHeight = scrollY.interpolate({
+        inputRange: [0, 180],
+        outputRange: [250, 0],
+        extrapolate: 'clamp',
+    });
+
+    const heroPadding = scrollY.interpolate({
+        inputRange: [0, 180],
+        outputRange: [24, 0],
+        extrapolate: 'clamp',
+    });
+
+    const heroMargin = scrollY.interpolate({
+        inputRange: [0, 180],
+        outputRange: [8, 0],
+        extrapolate: 'clamp',
+    });
+
+    const heroScale = scrollY.interpolate({
+        inputRange: [0, 150],
+        outputRange: [1, 0.85],
+        extrapolate: 'clamp',
+    });
+
+    const heroTranslateY = scrollY.interpolate({
+        inputRange: [0, 150],
+        outputRange: [0, -20],
+        extrapolate: 'clamp',
+    });
 
     useEffect(() => {
         loadProfileData();
@@ -233,8 +274,12 @@ const ProfileScreen = ({ navigation, route }) => {
                 return;
             }
 
-            console.log('--- FETCHING PROFILE FROM SERVER ---');
-            const response = await fetch('http://192.168.14.120:8000/get-profile', {
+            const endpoint = ENDPOINTS.PROFILE;
+
+            console.log(`--- FETCHING PROFILE FROM SERVER ---`);
+            const response = await fetch(endpoint, {
+
+
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -242,60 +287,160 @@ const ProfileScreen = ({ navigation, route }) => {
                 },
             });
 
+
             const data = await response.json();
             console.log('Profile API Response:', data);
 
             if (response.ok) {
-                // If the server returns data, use it
-                setProfileData(data);
-                setUserData(data); // Sync to context
-                
+                // If the server returns data, use it with mapped camelCase fields for the UI
+                const mappedData = {
+                    ...data,
+                    homeAddress: data.home_address || data.homeAddress || "",
+                    companyName: data.company_name || data.companyName || "",
+                    businessType: data.business_type || data.businessType || "",
+                    distributorType: data.distributor_type || data.distributorType || "",
+                    licenseNumber: data.license_number || data.licenseNumber || "",
+                };
+                setProfileData(mappedData);
+                setUserData(mappedData); // Sync to context
+
                 // Optionally save to local database for offline access
-                if (userRole === 'doctor') {
-                    await saveDoctorInfo(data);
-                } else {
-                    await savePatientInfo(data);
-                }
+                // if (userRole === 'doctor') {
+                //     await saveDoctorInfo(data);
+                // } else {
+                //     await savePatientInfo(data);
+                // }
             } else {
                 console.error('Failed to fetch profile from server:', data.detail);
                 // Fallback to local data
                 const localData = userRole === 'doctor' ? await getDoctorInfo() : await getPatientInfo();
-                if (localData) setProfileData(localData);
+                if (localData) {
+                    const mappedData = {
+                        ...localData,
+                        homeAddress: localData.home_address || localData.homeAddress || "",
+                        companyName: localData.company_name || localData.companyName || "",
+                        businessType: localData.business_type || localData.businessType || "",
+                        distributorType: localData.distributor_type || localData.distributorType || "",
+                        licenseNumber: localData.license_number || localData.licenseNumber || "",
+                    };
+                    setProfileData(mappedData);
+                }
             }
         } catch (e) {
             console.error('Failed to load profile data:', e);
             // Fallback to local data
             const localData = userRole === 'doctor' ? await getDoctorInfo() : await getPatientInfo();
-            if (localData) setProfileData(localData);
+            if (localData) {
+                const mappedData = {
+                    ...localData,
+                    homeAddress: localData.home_address || localData.homeAddress || "",
+                    companyName: localData.company_name || localData.companyName || "",
+                    businessType: localData.business_type || localData.businessType || "",
+                    distributorType: localData.distributor_type || localData.distributorType || "",
+                    licenseNumber: localData.license_number || localData.licenseNumber || "",
+                };
+                setProfileData(mappedData);
+            }
         }
         setLoading(false);
     };
 
     const handleSave = async () => {
-        if (!profileData.name?.trim()) {
+        const nameToValidate = profileData?.full_name || profileData?.name;
+        if (!nameToValidate?.trim()) {
             Alert.alert('Required', 'Please enter the name before saving.');
             return;
         }
+
         try {
             setSaving(true);
+
+            // API UPDATE
+            const endpoint = ENDPOINTS.PROFILE;
+
+            const toNumericOrString = (val) => {
+                if (val === null || val === undefined || val === '') return val;
+                const str = String(val).trim();
+                if (!str) return '';
+                if (/^\d+$/.test(str)) {
+                    return parseInt(str, 10);
+                }
+                if (/^\d*\.\d+$/.test(str)) {
+                    return parseFloat(str);
+                }
+                return val;
+            };
+
+            const cleanPayload = {
+                name: profileData.name || profileData.full_name || "",
+                email: profileData.email || "",
+                password: profileData.password || "", // Sending existing password if available
+                role: profileData.role || userRole || "",
+                phone: toNumericOrString(profileData.phone),
+                gender: (profileData.gender || "").toLowerCase(),
+                age: toNumericOrString(profileData.age) || 0,
+                dob: profileData.dob || "",
+                homeAddress: profileData.home_address || profileData.home_address || "",
+                area: profileData.area || profileData.locality || "",
+                district: profileData.district || "",
+                state: profileData.state || "",
+                pincode: toNumericOrString(profileData.pincode),
+            };
+
+            // Role specific fields
+            if (userRole === 'doctor') {
+                cleanPayload.hospital = profileData.hospital || "";
+                cleanPayload.specialisation = profileData.specialisation || "";
+                cleanPayload.qualification = profileData.qualification || "";
+                cleanPayload.experience = toNumericOrString(profileData.experience);
+            } else if (userRole === 'distributor') {
+                cleanPayload.companyName = profileData.companyName || "";
+                cleanPayload.businessType = profileData.businessType || "";
+                cleanPayload.distributorType = profileData.distributorType || "";
+                cleanPayload.licenseNumber = toNumericOrString(profileData.licenseNumber);
+            }
+
+
+            console.log(`--- UPDATING PROFILE ON SERVER ---`, cleanPayload);
+            const response = await fetch(endpoint, {
+
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(cleanPayload),
+            });
+
+
+            const result = await response.json();
+            console.log('Update Profile Response:', result);
+
+            if (!response.ok) {
+                throw new Error(result.detail || 'Failed to update profile on server');
+            }
+
+            // LOCAL SAVE
             if (userRole === 'doctor') {
                 await saveDoctorInfo(profileData);
             } else {
                 await savePatientInfo(profileData);
             }
+
             if (isSetup) {
                 navigation.replace('MainTabs');
             } else {
                 setUserData(profileData); // Sync to context after save
                 setIsEditing(false);
-                Alert.alert('✅ Saved', 'Profile updated successfully.');
+                Alert.alert('✅ Saved', 'Profile updated successfully on server.');
             }
         } catch (e) {
             console.error('Failed to save profile data:', e);
-            Alert.alert('Error', 'Could not save profile. Please try again.');
+            Alert.alert('Error', e.message || 'Could not save profile. Please try again.');
         } finally {
             setSaving(false);
         }
+
     };
 
     const handleInputChange = (field, text) => {
@@ -341,10 +486,10 @@ const ProfileScreen = ({ navigation, route }) => {
                         try {
                             // 1. Reset context range
                             setSelectedRange(7);
-                            
+
                             // 2. Clear ENTIRE Database (Patients, Doctors, and Logs)
                             await clearAllData();
-                            
+
                             console.log("Database cleared successfully.");
                             navigation.replace('Login');
                         } catch (e) {
@@ -357,12 +502,14 @@ const ProfileScreen = ({ navigation, route }) => {
         );
     };
 
-    const initials = (profileData?.name || (userRole === 'doctor' ? 'D' : 'P'))
+    const initials = (profileData?.name || profileData?.full_name || (userRole === 'doctor' ? 'D' : 'P'))
         .split(' ')
         .map(w => w[0])
         .join('')
         .toUpperCase()
         .slice(0, 2);
+
+
 
     // ── common field props helper
     const fp = (field) => ({
@@ -371,6 +518,7 @@ const ProfileScreen = ({ navigation, route }) => {
         value: profileData?.[field],
         onChangeText: handleInputChange,
     });
+
     const fpAction = (field, type) => ({
         ...fp(field),
         type,
@@ -419,8 +567,13 @@ const ProfileScreen = ({ navigation, route }) => {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
-                <ScrollView
+                <Animated.ScrollView
                     ref={scrollRef}
+                    onScroll={Animated.event(
+                        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                        { useNativeDriver: false }
+                    )}
+                    scrollEventThrottle={16}
                     contentContainerStyle={[
                         styles.scroll,
                         isKeyboardVisible && { paddingBottom: 20 } // Large padding to ensure everything can be scrolled up
@@ -429,15 +582,28 @@ const ProfileScreen = ({ navigation, route }) => {
                     keyboardShouldPersistTaps="handled"
                 >
                     {/* ── Avatar Hero Card ── */}
-                    <View style={styles.heroCard}>
+                    <Animated.View style={[
+                        styles.heroCard, 
+                        { 
+                            opacity: heroOpacity, 
+                            maxHeight: heroHeight, 
+                            paddingVertical: heroPadding, 
+                            marginBottom: heroMargin, 
+                            transform: [{ scale: heroScale }, { translateY: heroTranslateY }],
+                            overflow: 'hidden',
+                            borderWidth: scrollY.interpolate({ inputRange: [0, 150], outputRange: [1, 0], extrapolate: 'clamp' })
+                        }
+                    ]}>
                         <TouchableOpacity activeOpacity={0.85} onPress={pulseAvatar}>
                             <Animated.View style={[styles.avatar, { transform: [{ scale: avatarScale }] }]}>
                                 <Text style={styles.avatarText}>{initials}</Text>
                             </Animated.View>
                         </TouchableOpacity>
                         <Text style={styles.heroName}>
-                            {profileData?.name || (isSetup ? `New ${userRole === 'doctor' ? 'Doctor' : 'Patient'}` : 'Your Name')}
+                            {profileData?.name || profileData?.full_name || (isSetup ? `New ${userRole === 'doctor' ? 'Doctor' : 'Patient'}` : 'Your Name')}
                         </Text>
+
+
                         <View style={styles.idBadge}>
                             <Text style={styles.idBadgeText}>
                                 ID: {userRole === 'doctor' ? 'D' : 'P'}-{profileData?.patient_custom_id || profileData?.id || 'Not Assigned'}
@@ -448,7 +614,7 @@ const ProfileScreen = ({ navigation, route }) => {
                                 {profileData.gender}{profileData?.age ? `  ·  ${profileData.age} yrs` : ''}{profileData?.dob ? `  ·  ${profileData.dob}` : ''}
                             </Text>
                         ) : null}
-                    </View>
+                    </Animated.View>
 
                     {/* ── Role Specific / Doctor Information ── */}
                     {userRole === 'doctor' && (
@@ -459,6 +625,8 @@ const ProfileScreen = ({ navigation, route }) => {
                                 placeholder="e.g. Dr. Anil Kumar"
                                 {...fp('name')}
                             />
+
+
                             <FieldRow
                                 label="Hospital / Clinic Name"
                                 icon="hospital-building"
@@ -469,8 +637,9 @@ const ProfileScreen = ({ navigation, route }) => {
                                 label="Specialisation"
                                 icon="stethoscope"
                                 placeholder="e.g. Pulmonologist"
-                                {...fp('specialization')}
+                                {...fp('specialisation')}
                             />
+
                             <FieldRow
                                 label="Qualification"
                                 icon="school-outline"
@@ -503,6 +672,8 @@ const ProfileScreen = ({ navigation, route }) => {
                             placeholder="e.g. user name"
                             {...fp('name')}
                         />
+
+
                         <FieldRow
                             label="Age"
                             icon="calendar-account-outline"
@@ -548,6 +719,8 @@ const ProfileScreen = ({ navigation, route }) => {
                             placeholder="e.g. Rohini Sector 7"
                             {...fp('area')}
                         />
+
+
                         <FieldRow
                             label="District"
                             icon="map-marker-radius-outline"
@@ -570,42 +743,6 @@ const ProfileScreen = ({ navigation, route }) => {
                         />
                     </SectionCard>
 
-                    {/* ── CPAP Device (Patient Only) ── */}
-                    {userRole === 'patient' && (
-                        <SectionCard title="CPAP Device" iconName="medical-bag">
-                            <FieldRow
-                                label="Device Model"
-                                icon="cpu-64-bit"
-                                placeholder="Select device model"
-                                {...fpAction('device_model', 'select')}
-                            />
-                            <FieldRow
-                                label="Device Serial No (SN)"
-                                icon="barcode-scan"
-                                placeholder="e.g. AS11-9238-120"
-                                last={true}
-                                {...fp('machine_serial')}
-                            />
-                        </SectionCard>
-                    )}
-
-                    {/* ── Referring Physician ── */}
-                    {/* <SectionCard title="Referring Physician" iconName="doctor">
-                        <FieldRow
-                            label="Doctor Name"
-                            icon="stethoscope"
-                            placeholder="e.g. Dr. Anil Kumar"
-                            {...fp('doctor_name')}
-                        />
-                        <FieldRow
-                            label="Doctor Phone"
-                            icon="phone-plus-outline"
-                            placeholder="e.g. +91 9876543210"
-                            keyboardType="phone-pad"
-                            last={true}
-                            {...fp('doctor_phone')}
-                        />
-                    </SectionCard> */}
 
                     {/* ── Save Button ── */}
                     {isEditing && (
@@ -627,15 +764,15 @@ const ProfileScreen = ({ navigation, route }) => {
                     )}
 
                     {/* ── Logout ── */}
-                    {!isSetup && (
+                    {/* {!isSetup && (
                         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.75}>
                             <Icon name="logout-variant" size={18} color={ERROR} />
                             <Text style={styles.logoutText}>Logout Account</Text>
                         </TouchableOpacity>
-                    )}
+                    )} */}
 
                     <View style={{ height: 40 }} />
-                </ScrollView>
+                </Animated.ScrollView>
             </KeyboardAvoidingView>
 
             {/* ── DatePicker ── */}
@@ -727,16 +864,14 @@ const styles = StyleSheet.create({
     editBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
     // Scroll
-    scroll: { padding: 16 },
+    scroll: { padding: 16, paddingBottom: 75 },
 
     // Hero card
     heroCard: {
         backgroundColor: '#fff',
         borderRadius: 20,
         alignItems: 'center',
-        padding: 24,
-        marginBottom: 8,
-        borderWidth: 1,
+        paddingHorizontal: 24, // paddingVertical is animated
         borderColor: BORDER,
         shadowColor: PRIMARY,
         shadowOpacity: 0.08,

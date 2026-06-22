@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -20,6 +20,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { getLogs, getPatientInfo, getDoctorInfo } from '../api/database';
 import { useData } from '../context/DataContext';
+import LinearGradient from 'react-native-linear-gradient';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - Spacing.m * 3) / 2;
@@ -33,6 +34,21 @@ const DashboardScreen = ({ navigation }) => {
     const [isInfoModalVisible, setIsInfoModalVisible] = useState(false);
     const [modalConfig, setModalConfig] = useState({ title: '', sub: '', icon: 'database-off', color: '#EF4444' });
     const [fadeAnim] = useState(new Animated.Value(0));
+    const menuScale = useRef(new Animated.Value(1)).current;
+    const menuOpacity = useRef(new Animated.Value(1)).current;
+
+    const onMenuPressIn = () => {
+        Animated.parallel([
+            Animated.spring(menuScale, { toValue: 0.88, useNativeDriver: true, speed: 50, bounciness: 4 }),
+            Animated.timing(menuOpacity, { toValue: 0.7, duration: 80, useNativeDriver: true }),
+        ]).start();
+    };
+    const onMenuPressOut = () => {
+        Animated.parallel([
+            Animated.spring(menuScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }),
+            Animated.timing(menuOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+        ]).start();
+    };
 
     const fetchData = async () => {
         try {
@@ -193,22 +209,37 @@ const DashboardScreen = ({ navigation }) => {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <TouchableOpacity
                         onPress={() => navigation.openDrawer()}
-                        activeOpacity={0.7}
-                        style={styles.profileBtn}
+                        onPressIn={onMenuPressIn}
+                        onPressOut={onMenuPressOut}
+                        activeOpacity={1}
                     >
-                        <View style={{
-                            width: 45,
-                            height: 45,
-                            borderRadius: 14,
-                            backgroundColor: 'rgba(255,255,255,0.2)',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            borderWidth: 1,
-                            borderColor: 'rgba(255,255,255,0.3)',
+                        <Animated.View style={{
+                            transform: [{ scale: menuScale }],
+                            opacity: menuOpacity,
                         }}>
-                            <Icon name="menu" size={26} color="#FFF" />
-                        </View>
-
+                            {/* Premium Frosted Pill Button */}
+                            <LinearGradient
+                                colors={['rgba(255,255,255,0.32)', 'rgba(255,255,255,0.10)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={{
+                                    width: 46,
+                                    height: 46,
+                                    borderRadius: 15,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.55)',
+                                    elevation: 6,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 3 },
+                                    shadowOpacity: 0.2,
+                                    shadowRadius: 6,
+                                }}
+                            >
+                                <Icon name="menu" size={24} color="#FFFFFF" />
+                            </LinearGradient>
+                        </Animated.View>
                     </TouchableOpacity>
                     <View style={{ marginLeft: 15 }}>
                         <Text style={styles.brandGreeting}>User Dashboard</Text>
@@ -456,7 +487,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: Spacing.m,
         paddingBottom: 10,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 1 : 20,
         backgroundColor: Colors.primary,
         elevation: 8,
     },
@@ -473,14 +504,14 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         marginTop: 0,
     },
-    profileBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.18)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    // profileBtn: {
+    //     width: 40,
+    //     height: 40,
+    //     borderRadius: 20,
+    //     backgroundColor: 'rgba(255,255,255,0.18)',
+    //     justifyContent: 'center',
+    //     alignItems: 'center',
+    // },
     container: {
         flex: 1,
         backgroundColor: '#FFFFFF',
@@ -489,7 +520,7 @@ const styles = StyleSheet.create({
 
     scrollContent: {
         paddingHorizontal: Spacing.m,
-        paddingBottom: 80,
+        paddingBottom: 130,
     },
     sectionHeaderRow: {
         flexDirection: 'row',

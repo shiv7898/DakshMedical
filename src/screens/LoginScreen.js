@@ -18,10 +18,12 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { Colors } from '../styles/theme';
-import { User, Lock, ArrowRight, ShieldCheck } from 'lucide-react-native';
+import { User, Lock, ArrowRight, ShieldCheck, Eye, EyeOff } from 'lucide-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { savePatientInfo, saveDoctorInfo } from '../api/database';
+import { ENDPOINTS } from '../api/apiConfig';
+
 
 const LoginScreen = ({ navigation }) => {
     const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
@@ -32,6 +34,7 @@ const LoginScreen = ({ navigation }) => {
     const [focusField, setFocusField] = useState(null);
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -123,7 +126,7 @@ const LoginScreen = ({ navigation }) => {
     //     try {
     //         // --- DUMMY API CALL START ---
     //         // Simulating a POST request to an authentication endpoint
-    //         const ApiUrl = 'http://192.168.14.120:8000/login'; // Placeholder URL
+    //         const ApiUrl = 'http://192.168.14.21:8000/login'; // Placeholder URL
     //         const payload = {
     //             username: username,
     //             password: password,
@@ -172,87 +175,139 @@ const LoginScreen = ({ navigation }) => {
     //         setLoading(false);
     //     }
     // };
-const handleLogin = async () => {
-  if (!username || !password) {
-    Alert.alert('Error', 'Please enter email and password');
-    return;
-  }
+    const handleLogin = async () => {
+        if (!username || !password) {
+            Alert.alert('Error', 'Please enter email and password');
+            return;
+        }
+        try {
+            setLoading(true);
 
-  try {
-    setLoading(true);
 
-    // LOGIN API
-    const loginResponse = await fetch('http://192.168.14.120:8000/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: username,     // input field email use ho raha hai
-        password: password,
-      }),
-    });
 
-    const loginData = await loginResponse.json();
+            // LOGIN API
 
-    console.log('Login Response =>', loginData);
+            const loginResponse = await fetch(ENDPOINTS.LOGIN, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: username,     // input field email use ho raha hai
+                    password: password,
+                }),
+            });
 
-    if (!loginResponse.ok) {
-      Alert.alert('Login Failed', loginData.detail || 'Invalid Credentials');
-      return;
-    }
+            const loginData = await loginResponse.json();
 
-    // TOKEN + ROLE
-    const token = loginData.access_token;
-    const role = loginData.role;
+            console.log('Login Response =>', loginData);
 
-    global.token = token;
-    setToken(token); // Save to context
-    setUserRole(role);
+            if (!loginResponse.ok) {
+                Alert.alert('Login Failed', loginData.detail || 'Invalid Credentials');
+                return;
+            }
 
-    // FETCH FULL PROFILE DATA USING THE CONSISTENT ENDPOINT
-    const profileResponse = await fetch('http://192.168.14.120:8000/get-profile', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
+            // TOKEN + ROLE
+            const token = loginData.access_token;
+            const role = loginData.role;
 
-    const profileData = await profileResponse.json();
+            global.token = token;
+            setToken(token); // Save to context
+            setUserRole(role);
 
-    console.log('Role API Response =>', profileData);
+            // FETCH FULL PROFILE DATA USING THE CONSISTENT ENDPOINT
+            const profileResponse = await fetch(ENDPOINTS.PROFILE, {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
 
-    if (!profileResponse.ok) {
-      Alert.alert('Error', profileData.detail || 'Unauthorized');
-      return;
-    }
 
-    // DATA SAVE KARNA HO TO KAR SAKTE HO
-    global.userData = profileData;
-    setUserData(profileData); // Save to context for immediate UI update
+            const profileData = await profileResponse.json();
 
-    // PERSIST TO LOCAL DATABASE
-    try {
-      if (role === 'doctor') {
-        await saveDoctorInfo(profileData);
-      } else {
-        await savePatientInfo(profileData);
-      }
-    } catch (dbError) {
-      console.log('DB SAVE ERROR =>', dbError);
-    }
+            console.log('Role API Response profile =>', profileData);
 
-    // NEXT SCREEN
-    navigation.replace('MainTabs');
+            if (!profileResponse.ok) {
+                Alert.alert('Error', profileData.detail || 'Unauthorized');
+                return;
+            }
 
-  } catch (error) {
-    console.log('API ERROR =>', error);
-    Alert.alert('Error', 'Server not responding');
-  } finally {
-    setLoading(false);
-  }
-};
+            // DATA SAVE KARNA HO TO KAR SAKTE HO
+            global.userData = profileData;
+            setUserData(profileData); // Save to context for immediate UI update
+
+            // PERSIST TO LOCAL DATABASE
+            try {
+                if (role === 'doctor') {
+                    await saveDoctorInfo(profileData);
+                } else {
+                    await savePatientInfo(profileData);
+                }
+            } catch (dbError) {
+                console.log('DB SAVE ERROR =>', dbError);
+            }
+
+            // NEXT SCREEN
+            navigation.replace('MainTabs');
+
+        } catch (error) {
+            console.log('API ERROR =>', error);
+            Alert.alert('Error', 'Server not responding');
+        } finally {
+            setLoading(false);
+        }
+    };
+    // const handleLogin = async () => {
+    //   try {
+    //     setLoading(true);
+
+    //     let role = 'patient';
+    //     let user = {
+    //       name: 'Test Patient',
+    //       email: 'patient@gmail.com',
+    //       role: 'patient',
+    //     };
+
+    //     if (username.toLowerCase() === 'distributor' && password === 'distributor') {
+    //       role = 'distributor';
+    //       user = {
+    //         name: 'Airsine Distributor',
+    //         email: 'distributor@airsine.io',
+    //         role: 'distributor',
+    //       };
+    //     } else if (username.toLowerCase() === 'd' && password === 'd') {
+    //       role = 'doctor';
+    //       user = {
+    //         name: 'Dr. Sameer',
+    //         email: 'doctor@gmail.com',
+    //         role: 'doctor',
+    //       };
+    //     } else if (username.toLowerCase() === 'p' && password === 'p') {
+    //       role = 'patient';
+    //       user = {
+    //         name: 'Test Patient',
+    //         email: 'patient@gmail.com',
+    //         role: 'patient',
+    //       };
+    //     }
+
+    //     // Set context values
+    //     setUserRole(role);
+    //     setToken('test-token');
+    //     setUserData(user);
+    //     global.userData = user;
+
+    //     // Direct Dashboard / MainTabs
+    //     navigation.replace('MainTabs');
+
+    //   } catch (error) {
+    //     console.log(error);
+    //   } finally {
+    //     setLoading(false);
+    //   }
+    // };
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -339,15 +394,21 @@ const handleLogin = async () => {
                                             <Lock size={20} color={focusField === 'pass' ? Colors.primary : '#94A3B8'} />
                                         </View>
                                         <TextInput
-                                            style={styles.input}
+                                            style={[styles.input, { flex: 1 }]}
                                             placeholder="Password"
                                             placeholderTextColor="#94A3B8"
                                             value={password}
                                             onChangeText={setPassword}
                                             onFocus={() => setFocusField('pass')}
                                             onBlur={() => setFocusField(null)}
-                                            secureTextEntry
+                                            secureTextEntry={!showPassword}
                                         />
+                                        <TouchableOpacity
+                                            style={{ paddingHorizontal: 1, justifyContent: 'center' }}
+                                            onPress={() => setShowPassword(!showPassword)}
+                                        >
+                                            {showPassword ? <Eye size={20} color="#94A3B8" /> : <EyeOff size={20} color="#94A3B8" />}
+                                        </TouchableOpacity>
                                     </View>
 
                                     <TouchableOpacity
@@ -358,9 +419,9 @@ const handleLogin = async () => {
                                         <Text style={styles.forgotPassText}>Forgot Password?</Text>
                                     </TouchableOpacity>
 
-                                    <TouchableOpacity 
-                                        style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
-                                        onPress={handleLogin} 
+                                    <TouchableOpacity
+                                        style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                                        onPress={handleLogin}
                                         activeOpacity={0.8}
                                         disabled={loading}
                                     >

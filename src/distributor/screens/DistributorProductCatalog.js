@@ -26,16 +26,162 @@ import Animated, {
   interpolate,
   Extrapolate,
 } from 'react-native-reanimated';
-import { Colors } from '../styles/theme';
+import { Colors } from '../../styles/theme';
 import LottieView from 'lottie-react-native';
+import { useData } from '../../context/DataContext';
+import { BASE_URL, ENDPOINTS } from '../../api/apiConfig';
 import { useFocusEffect } from '@react-navigation/native';
-import { useData } from '../context/DataContext';
-import { BASE_URL, ENDPOINTS } from '../api/apiConfig';
 
-const CATEGORIES = ['ALL', 'CPAP', 'APAP', 'BPAP'];
+// const DUMMY_PRODUCTS = [
+//   {
+//     id: '1',
+//     name: 'AirCurve 10 VAuto',
+//     type: 'BIPAP',
+//     price: 85000,
+//     mrp: 95000,
+//     discount: '10% OFF',
+//     isNew: true,
+//   },
+//   {
+//     id: '2',
+//     name: 'AirSense 10 Auto',
+//     type: 'APAP',
+//     price: 65000,
+//     mrp: 72000,
+//     discount: '8% OFF',
+//     isNew: true,
+//   },
+//   {
+//     id: '3',
+//     name: 'S9 Escape',
+//     type: 'CPAP',
+//     price: 45000,
+//     mrp: 50000,
+//     discount: '10% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '4',
+//     name: 'DreamStation 2',
+//     type: 'APAP',
+//     price: 72000,
+//     mrp: 80000,
+//     discount: '10% OFF',
+//     isNew: true,
+//   },
+//   {
+//     id: '5',
+//     name: 'Lumis 150 VPAP',
+//     type: 'BIPAP',
+//     price: 120000,
+//     mrp: 135000,
+//     discount: '11% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '6',
+//     name: 'AirMini Travel',
+//     type: 'CPAP',
+//     price: 55000,
+//     mrp: 60000,
+//     discount: '8% OFF',
+//     isNew: true,
+//   },
+//   {
+//     id: '7',
+//     name: 'BMC G3 A20',
+//     type: 'APAP',
+//     price: 38000,
+//     mrp: 45000,
+//     discount: '15% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '9',
+//     name: 'Prisma 20A',
+//     type: 'APAP',
+//     price: 78000,
+//     mrp: 85000,
+//     discount: '8% OFF',
+//     isNew: true,
+//   },
+//   {
+//     id: '10',
+//     name: 'iBreeze Auto CPAP',
+//     type: 'APAP',
+//     price: 42000,
+//     mrp: 48000,
+//     discount: '12% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '11',
+//     name: 'Fisher & Paykel SleepStyle',
+//     type: 'CPAP',
+//     price: 68000,
+//     mrp: 75000,
+//     discount: '9% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '12',
+//     name: 'Yuwell YH-560',
+//     type: 'APAP',
+//     price: 32000,
+//     mrp: 38000,
+//     discount: '16% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '13',
+//     name: 'AirSense 11 Auto',
+//     type: 'APAP',
+//     price: 95000,
+//     mrp: 105000,
+//     discount: '9% OFF',
+//     isNew: true,
+//   },
+//   {
+//     id: '14',
+//     name: 'BiPAP A40',
+//     type: 'BIPAP',
+//     price: 155000,
+//     mrp: 170000,
+//     discount: '8% OFF',
+//     isNew: true,
+//   },
+//   {
+//     id: '15',
+//     name: 'AirCurve 10 ST',
+//     type: 'BIPAP',
+//     price: 110000,
+//     mrp: 125000,
+//     discount: '12% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '18',
+//     name: 'SomnoBalance',
+//     type: 'APAP',
+//     price: 62000,
+//     mrp: 70000,
+//     discount: '11% OFF',
+//     isNew: false,
+//   },
+//   {
+//     id: '19',
+//     name: 'Auto SV Ventilator',
+//     type: 'BIPAP',
+//     price: 185000,
+//     mrp: 210000,
+//     discount: '11% OFF',
+//     isNew: true,
+//   },
+// ];
+
+const CATEGORIES = ['ALL', 'CPAP', 'APAP', 'BIPAP'];
 const SEARCH_BAR_HEIGHT = 56;
 
-// ─── Memoized Product Card ───────────────────────────────────────────────────
 const ProductCard = memo(({ item, index, onPress }) => (
   <Animated.View layout={Layout.springify()} style={styles.productCard}>
     <TouchableOpacity
@@ -43,60 +189,49 @@ const ProductCard = memo(({ item, index, onPress }) => (
       style={styles.cardInner}
       onPress={onPress}
     >
-      {/* Image Section */}
       <View style={styles.imageSection}>
-        {item.isNew ? (
+        {item.isNew && (
           <View style={styles.topBadge}>
             <Text style={styles.topBadgeText}>NEW</Text>
           </View>
-        ) : null}
+        )}
         <TouchableOpacity style={styles.wishlistBtn}>
           <Icon name="heart-outline" size={16} color="#94A3B8" />
         </TouchableOpacity>
-
         {item.image ? (
           <Image
             source={{ uri: item.image }}
             style={{ width: 140, height: 140, resizeMode: 'contain' }}
           />
         ) : (
-          <View style={styles.noImagePlaceholder}>
-            <Icon name="image-off-outline" size={40} color="#CBD5E1" />
-            <Text style={styles.noImageText}>No Image</Text>
-          </View>
+          <Image
+            source={require('../../assets/img/machine1.png')}
+            style={{ width: 140, height: 140, resizeMode: 'contain' }}
+          />
         )}
-
         <View style={styles.brandTag}>
-          <Text style={styles.brandTagText}>AIRSINE Choice</Text>
+          <Text style={styles.brandTagText}>DISTRIBUTOR PORTAL</Text>
         </View>
       </View>
-
-      {/* Info Section */}
       <View style={styles.cardInfo}>
         <Text style={styles.productTypeTag}>{item.type}</Text>
         <Text style={styles.productNameText} numberOfLines={2}>
           {item.name}
         </Text>
-
         <View style={styles.ratingRow}>
           <View style={styles.ratingBadge}>
             <Text style={styles.ratingText}>4.8</Text>
             <Icon name="star" size={8} color="#FFF" />
           </View>
-          <Text style={styles.reviewCount}>(1.2k)</Text>
+          <Text style={styles.reviewCount}>(1.2k reviews)</Text>
         </View>
-
         <View style={styles.priceRow}>
           <View>
             <Text style={styles.finalPrice}>
-              {'\u20B9'}
-              {item.price.toLocaleString()}
+              ₹{item.price.toLocaleString()}
             </Text>
             <View style={styles.mrpRow}>
-              <Text style={styles.mrpText}>
-                {'\u20B9'}
-                {item.mrp.toLocaleString()}
-              </Text>
+              <Text style={styles.mrpText}>₹{item.mrp.toLocaleString()}</Text>
               <Text style={styles.discountPercent}>{item.discount}</Text>
             </View>
           </View>
@@ -109,95 +244,72 @@ const ProductCard = memo(({ item, index, onPress }) => (
   </Animated.View>
 ));
 
-// ─── Main Screen ─────────────────────────────────────────────────────────────
-const ProductCatalogScreen = ({ navigation }) => {
+const DistributorProductCatalog = ({ navigation }) => {
+  const { token, userData } = useData();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-
+  const [isOrderLoading, setIsOrderLoading] = useState(false);
   const [isOrderModalVisible, setIsOrderModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [isSuccessVisible, setIsSuccessVisible] = useState(false);
-  const [isOrderLoading, setIsOrderLoading] = useState(false);
-
-  const { token, userData } = useData();
-
   const [referralInput, setReferralInput] = useState('');
   const [appliedReferral, setAppliedReferral] = useState(null);
   const [referralDiscountPercent, setReferralDiscountPercent] = useState(0);
   const [isVerifyingReferral, setIsVerifyingReferral] = useState(false);
   const [referralStatus, setReferralStatus] = useState({ success: null, error: null });
 
-  const searchVisible = useSharedValue(1);
-  const lastScrollY = useRef(0);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      setIsInitialLoading(true);
-      const response = await fetch(`${ENDPOINTS.PRODUCTS}?page=1&limit=20`);
+      console.log('📡 Fetching Distributor Products from:', `${ENDPOINTS.DISTRIBUTOR_PRODUCTS}?page=1&limit=20`);
+      const response = await fetch(`${ENDPOINTS.DISTRIBUTOR_PRODUCTS}?page=1&limit=20`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
       const result = await response.json();
+      console.log('📦 API Result:', result);
 
-      console.log('📦 API Data Received:', result);
-
-      if (result && result.data) {
-        const transformed = result.data.map(p => {
-          let imageUrl = null;
-          const rawImage = p.product_image || p.image_url;
-
-          if (rawImage) {
-            if (rawImage.startsWith('http')) {
-              // Extract the path after the domain/port (e.g., /uploads/products/img.png)
-              const pathPart = rawImage.split(':8000')[1] || rawImage.split('/').slice(3).join('/');
-              const cleanPath = pathPart.startsWith('/') ? pathPart : `/${pathPart}`;
-              imageUrl = `${BASE_URL}${cleanPath}`;
-            } else {
-              // If it's just a filename or relative path
-              const cleanFileName = rawImage.startsWith('/') ? rawImage.slice(1) : rawImage;
-              // Check if it already includes the directory structure
-              if (cleanFileName.includes('uploads/')) {
-                imageUrl = `${BASE_URL}/${cleanFileName}`;
-              } else {
-                imageUrl = `${BASE_URL}/uploads/products/${cleanFileName}`;
-              }
-            }
-          }
-
-          console.log(`🔗 Resolved Image URL for ${p.product_name}:`, imageUrl);
-
-          return {
-            id: p.id.toString(),
-            name: p.product_name,
-            type: p.product_type,
-            price: p.unit_price,
-            mrp: p.unit_mrp,
-            discount: `${p.discount}% OFF`,
-            isNew: false,
-            image: imageUrl,
-          };
-        });
-
-        setProducts(transformed);
-        setFilteredProducts(transformed);
+      if (response.ok && result.data) {
+        const mappedProducts = result.data.map(item => ({
+          id: item.id.toString(),
+          name: item.product_name,
+          type: item.product_type,
+          price: item.unit_price,
+          mrp: item.unit_mrp,
+          discount: `${item.discount}% OFF`,
+          isNew: true, // We can refine this later
+          image: item.image_url,
+          description: item.description
+        }));
+        setAllProducts(mappedProducts);
+        setFilteredProducts(mappedProducts);
       }
     } catch (error) {
-      console.error('❌ Fetch Error:', error);
+      console.error('❌ Error fetching products:', error);
     } finally {
       setIsInitialLoading(false);
     }
-  };
+  }, [token]);
 
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
-    }, []),
+    }, [fetchProducts])
   );
+
+  const searchVisible = useSharedValue(1);
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
     const q = search.toLowerCase();
-    const result = products.filter(p => {
+    const result = allProducts.filter(p => {
       const matchesSearch =
         p.name.toLowerCase().includes(q) || p.type.toLowerCase().includes(q);
       const matchesCategory =
@@ -205,7 +317,7 @@ const ProductCatalogScreen = ({ navigation }) => {
       return matchesSearch && matchesCategory;
     });
     setFilteredProducts(result);
-  }, [search, selectedCategory, products]);
+  }, [search, selectedCategory, allProducts]);
 
   const onScroll = useCallback(e => {
     const currentY = e.nativeEvent.contentOffset.y;
@@ -290,83 +402,78 @@ const ProductCatalogScreen = ({ navigation }) => {
 
   const handlePlaceOrder = async () => {
     if (!selectedProduct) return;
-
+    
+    setIsOrderLoading(true);
     try {
-      setIsOrderLoading(true);
-
       const orderPayload = {
         product_id: parseInt(selectedProduct.id),
         quantity: orderQuantity,
         referral_code: appliedReferral || undefined,
-        customer_name: userData?.full_name || userData?.name || 'N/A',
-        customer_phone: userData?.phone || 'N/A',
-        building: userData?.home_address || userData?.homeAddress || 'N/A',
-        locality: userData?.area || 'N/A',
-        district: userData?.district || 'N/A',
-        state: userData?.state || 'N/A',
-        pincode: userData?.pincode || 'N/A',
+        customer_name: userData?.name || 'Distributor Order',
+        customer_phone: userData?.phone || '',
+        building: userData?.home_address || 'Airsine Heights, Flat 402',
+        locality: userData?.area || 'Tech Park Area, Sector 62',
+        district: userData?.district || 'Noida',
+        state: userData?.state || 'Uttar Pradesh',
+        pincode: userData?.pincode || '201301',
       };
 
-      console.log('🚀 Sending Buy Machine Request:', orderPayload);
+      console.log('🚀 Sending Distributor Buy Machine Request:', orderPayload);
 
-      const response = await fetch(ENDPOINTS.BUY_MACHINE, {
+      const response = await fetch(ENDPOINTS.DISTRIBUTOR_BUY_MACHINE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(orderPayload),
       });
 
-      const contentType = response.headers.get('content-type');
-      let result;
-      if (contentType && contentType.includes('application/json')) {
-        result = await response.json();
-      } else {
-        const text = await response.text();
-        console.error('❌ Non-JSON Response:', text);
-        throw new Error(`Server returned ${response.status}: ${text}`);
-      }
-
-      console.log('✅ Buy Machine Response:', result);
+      const result = await response.json();
+      console.log('✅ Distributor Buy Machine Response:', result);
 
       if (response.ok) {
         closeOrderModal();
         setIsSuccessVisible(true);
-
         setTimeout(() => {
           setIsSuccessVisible(false);
-          navigation.navigate('MyOrders');
+          navigation.navigate('DistributorOrders');
         }, 3000);
       } else {
-        Alert.alert(
-          'Order Failed',
-          result.detail || result.error?.message || 'Something went wrong while placing your order.',
-        );
+        Alert.alert('Order Failed', result.detail || 'Something went wrong.');
       }
     } catch (error) {
-      console.error('❌ Buy Machine Error:', error);
-      Alert.alert(
-        'Order Error',
-        error.message || 'Could not connect to the server. Please check your internet.',
-      );
+      console.error('❌ Distributor Buy Machine Error:', error);
+      Alert.alert('Network Error', 'Could not connect to the server.');
     } finally {
       setIsOrderLoading(false);
     }
   };
 
-  const renderProduct = useCallback(
-    ({ item, index }) => (
-      <ProductCard
-        item={item}
-        index={index}
-        onPress={() => openOrderModal(item)}
-      />
-    ),
-    [openOrderModal],
-  );
+  const handleResetFilters = useCallback(() => {
+    setSearch('');
+    setSelectedCategory('ALL');
+    fetchProducts();
+  }, [fetchProducts]);
 
-  const keyExtractor = useCallback(item => item.id, []);
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconWrapper}>
+        <View style={styles.emptyIconGlow} />
+        <View style={styles.emptyIconBg}>
+          <Icon name="clipboard-search-outline" size={42} color={Colors.primary} />
+        </View>
+      </View>
+      <Text style={styles.emptyTitle}>No Products Found</Text>
+      <Text style={styles.emptySubtitle}>
+        We couldn't find any products matching your search or chosen category. Try resetting your filters.
+      </Text>
+      <TouchableOpacity style={styles.resetButton} onPress={handleResetFilters} activeOpacity={0.85}>
+        <Icon name="filter-remove-outline" size={16} color="#FFF" style={styles.resetIcon} />
+        <Text style={styles.resetButtonText}>Reset Filters</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const subtotal = selectedProduct ? selectedProduct.price * orderQuantity : 0;
   const referralDiscountAmount = subtotal * (referralDiscountPercent / 100);
@@ -374,8 +481,7 @@ const ProductCatalogScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.mainContainer}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-
+      <StatusBar barStyle="light-content" backgroundColor="#2D4F44" />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -383,30 +489,31 @@ const ProductCatalogScreen = ({ navigation }) => {
         >
           <Icon name="arrow-left" size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Product Catalog</Text>
-        <View style={{ width: 44 }} />
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Product Catalog</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('DistributorOrders')}
+          style={styles.headerBtn}
+        >
+          <Icon name="cart-outline" size={24} color="#FFF" />
+        </TouchableOpacity>
       </View>
 
       <Animated.View style={[styles.searchWrapper, animatedSearchStyle]}>
         <View style={styles.searchBox}>
           <Icon name="magnify" size={20} color="#94A3B8" />
           <TextInput
-            placeholder="Search CPAP, APAP, BPAP..."
+            placeholder="Search stock products..."
             value={search}
             onChangeText={setSearch}
             style={styles.searchField}
             placeholderTextColor="#94A3B8"
           />
-          {search !== '' ? (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Icon name="close-circle" size={17} color="#94A3B8" />
-            </TouchableOpacity>
-          ) : null}
         </View>
       </Animated.View>
 
       <View style={styles.filterBar}>
-
         <FlatList
           data={CATEGORIES}
           horizontal
@@ -435,30 +542,30 @@ const ProductCatalogScreen = ({ navigation }) => {
       </View>
 
       {isInitialLoading ? (
-        <View
-          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-        >
+        <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       ) : (
         <FlatList
           data={filteredProducts}
-          renderItem={renderProduct}
+          renderItem={({ item, index }) => (
+            <ProductCard
+              item={item}
+              index={index}
+              onPress={() => openOrderModal(item)}
+            />
+          )}
           numColumns={2}
-          keyExtractor={keyExtractor}
-          contentContainerStyle={styles.mainGrid}
-          columnWrapperStyle={styles.columnWrapper}
+          keyExtractor={item => item.id}
+          contentContainerStyle={[
+            styles.mainGrid,
+            filteredProducts.length === 0 && { flexGrow: 1, justifyContent: 'center' }
+          ]}
+          columnWrapperStyle={filteredProducts.length > 0 ? styles.columnWrapper : null}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          ListEmptyComponent={
-            <View style={styles.emptyCatalog}>
-              <Icon name="cube-scan" size={70} color="#E2E8F0" />
-              <Text style={styles.emptyCatalogText}>
-                No matching products found
-              </Text>
-            </View>
-          }
+          ListEmptyComponent={renderEmptyState}
         />
       )}
 
@@ -501,9 +608,10 @@ const ProductCatalogScreen = ({ navigation }) => {
                       style={styles.modalProductImage}
                     />
                   ) : (
-                    <View style={[styles.modalProductImage, styles.noImagePlaceholder]}>
-                      <Icon name="image-off-outline" size={28} color="#94A3B8" />
-                    </View>
+                    <Image
+                      source={require('../../assets/img/machine1.png')}
+                      style={styles.modalProductImage}
+                    />
                   )}
                   <View style={styles.modalProductDetails}>
                     <Text style={styles.modalProductType}>{selectedProduct.type}</Text>
@@ -535,7 +643,7 @@ const ProductCatalogScreen = ({ navigation }) => {
                     <View style={styles.addressHeaderRow}>
                       <Icon name="account-circle-outline" size={16} color="#64748B" />
                       <Text style={styles.customerName}>
-                        {userData?.full_name || userData?.name || 'Authorized User'}
+                        {userData?.name || 'Authorized Partner'}
                       </Text>
                       <View style={styles.tagDivider} />
                       <Icon name="phone-outline" size={14} color="#64748B" />
@@ -545,10 +653,10 @@ const ProductCatalogScreen = ({ navigation }) => {
                     </View>
                     <View style={styles.addressBody}>
                       <Text style={styles.addressText} numberOfLines={1}>
-                        {userData?.home_address || userData?.homeAddress || 'Airesine Heights, Flat 402'}
+                        {userData?.home_address || 'Airsine Heights, Flat 402'}
                       </Text>
                       <Text style={styles.addressText} numberOfLines={1}>
-                        {userData?.area || 'Tech Park Area, Sector 62'}
+                        {userData?.area || 'Sector 62'}
                       </Text>
                       <Text style={styles.addressText} numberOfLines={1}>
                         {`${userData?.district || 'Noida'}, ${userData?.state || 'Uttar Pradesh'} - ${userData?.pincode || '201301'}`}
@@ -701,7 +809,7 @@ const ProductCatalogScreen = ({ navigation }) => {
                   ) : (
                     <>
                       <Text style={styles.placeOrderBtnText}>
-                        Place Order
+                        Place Stock Order
                       </Text>
                       <Icon
                         name="arrow-right"
@@ -725,7 +833,7 @@ const ProductCatalogScreen = ({ navigation }) => {
             style={styles.successContent}
           >
             <LottieView
-              source={require('../assets/animations/Success.json')}
+              source={require('../../assets/animations/Success.json')}
               autoPlay
               loop={false}
               style={styles.successLottie}
@@ -733,13 +841,13 @@ const ProductCatalogScreen = ({ navigation }) => {
             <Text style={styles.thankYouText}>Thank You!</Text>
             <Text style={styles.successTitle}>Order Placed Successfully</Text>
             <Text style={styles.successMessage}>
-              Your medical supplies are being prepared and will be shipped soon.
+              Your wholesale order has been submitted to Airsine logistics.
             </Text>
 
             <View style={styles.redirectBox}>
               <ActivityIndicator size="small" color={Colors.primary} />
               <Text style={styles.redirectText}>
-                Redirecting to My Orders...
+                Redirecting to Stock Orders...
               </Text>
             </View>
           </Animated.View>
@@ -750,40 +858,38 @@ const ProductCatalogScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: '#F1F5F9' },
+  mainContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 14,
-    paddingTop:
-      // Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 20 : 20,
-      Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 1 : 20,
-
-    paddingBottom: 10,
-    elevation: 8,
+    backgroundColor: '#2D4F44',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 20,
+    paddingBottom: 20,
+    justifyContent: 'space-between',
   },
   headerBtn: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
+  headerTitleContainer: {
     flex: 1,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: 'bold',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '900',
     color: '#FFF',
+    letterSpacing: 0.5,
   },
   searchWrapper: {
     backgroundColor: '#FFF',
     paddingHorizontal: 14,
     justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   searchBox: {
     flexDirection: 'row',
@@ -793,154 +899,124 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 42,
   },
-  searchField: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#334155',
-    padding: 0,
-  },
-  filterBar: {
-    backgroundColor: '#FFF',
-    paddingVertical: 10,
-  },
+  searchField: { flex: 1, marginLeft: 8, fontSize: 14, color: '#334155' },
+  filterBar: { backgroundColor: '#FFF', paddingVertical: 10 },
   filterList: { paddingHorizontal: 14 },
   chip: {
     paddingHorizontal: 18,
     paddingVertical: 7,
     borderRadius: 20,
     marginRight: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   activeChip: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
   activeChipText: { color: '#FFF' },
-  mainGrid: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 40 },
+  mainGrid: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 150 },
   columnWrapper: { justifyContent: 'space-between' },
   productCard: { width: '48.5%', marginBottom: 12 },
   cardInner: {
     backgroundColor: '#FFF',
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     elevation: 2,
   },
   imageSection: {
-    height: 120,
+    height: 130,
     backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
   },
   topBadge: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    top: 8,
+    left: 8,
     backgroundColor: '#EF4444',
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 3,
+    borderRadius: 4,
     zIndex: 2,
   },
-  topBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
+  topBadgeText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
   wishlistBtn: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 2,
+    elevation: 2,
   },
   brandTag: {
     position: 'absolute',
-    bottom: 5,
-    left: 6,
-    backgroundColor: 'rgba(81,130,118,0.1)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
+    bottom: 6,
+    left: 8,
+    backgroundColor: 'rgba(16,185,129,0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  brandTagText: { fontSize: 8, fontWeight: 'bold', color: Colors.primary },
-  cardInfo: { padding: 10 },
-  productTypeTag: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#94A3B8',
-    marginBottom: 2,
-  },
-  noImagePlaceholder: {
-    width: 140,
-    height: 140,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-  },
-  noImageText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 4,
-    fontWeight: '600',
-  },
+  brandTagText: { fontSize: 8, fontWeight: 'bold', color: '#10B981' },
+  cardInfo: { padding: 12 },
+  productTypeTag: { fontSize: 9, fontWeight: '900', color: '#94A3B8' },
   productNameText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#1E293B',
-    marginBottom: 4,
+    // marginTop: 2,
+    height: 35,
   },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 4 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: -20 },
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#22C55E',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
-    marginRight: 4,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   ratingText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
     marginRight: 2,
   },
-  reviewCount: { fontSize: 10, color: '#94A3B8' },
+  reviewCount: { fontSize: 10, color: '#94A3B8', marginLeft: 5 },
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginTop: 2,
+    marginTop: 1,
   },
-  finalPrice: { fontSize: 15, fontWeight: '900', color: '#1E293B' },
+  finalPrice: { fontSize: 16, fontWeight: '900', color: '#1E293B' },
   mrpRow: { flexDirection: 'row', alignItems: 'center' },
   mrpText: {
     fontSize: 11,
     color: '#94A3B8',
     textDecorationLine: 'line-through',
-    marginRight: 4,
   },
-  discountPercent: { fontSize: 11, fontWeight: 'bold', color: '#22C55E' },
+  discountPercent: {
+    fontSize: 10,
+    color: '#EF4444',
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
   buyBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyCatalog: { marginTop: 60, alignItems: 'center' },
-  emptyCatalogText: {
-    marginTop: 12,
-    fontSize: 15,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -971,17 +1047,12 @@ const styles = StyleSheet.create({
   premiumProductCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ECFDF5', // Soft, luxurious light brand green backdrop
-    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
     padding: 12,
-    borderWidth: 1.5,
-    borderColor: '#D1FAE5', // Accent border line
-    marginBottom: 14,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 12,
   },
   modalProductImage: {
     width: 45,
@@ -997,15 +1068,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  modalProductDetails: {
-    flex: 1,
+  modalProductDetails: { 
+    flex: 1, 
     marginLeft: 14,
     justifyContent: 'center',
   },
   modalProductType: {
     fontSize: 9,
     fontWeight: '900',
-    color: '#047857', // Accent label color
+    color: Colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 2,
@@ -1013,27 +1084,15 @@ const styles = StyleSheet.create({
   modalProductName: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#064E3B', // Rich deep title green
+    color: '#064E3B',
     marginBottom: 4,
     flexWrap: 'wrap',
     flexShrink: 1,
   },
-  modalProductPrice: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#047857',
-  },
-  deliverySection: { marginBottom: 2 },
-  deliveryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  deliveryTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1E293B',
-    marginLeft: 6,
+  modalProductPrice: { 
+    fontSize: 16, 
+    fontWeight: '900', 
+    color: Colors.primary,
   },
   premiumHeaderBadge: {
     backgroundColor: 'rgba(34, 197, 94, 0.1)',
@@ -1048,16 +1107,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  premiumProductCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    marginBottom: 12,
   },
   premiumSectionCard: {
     backgroundColor: '#FFFFFF',
@@ -1290,7 +1339,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   placeOrderBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  dividerSmall: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 10 },
   modalQtyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1377,6 +1425,77 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginLeft: 10,
   },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    width: '100%',
+  },
+  emptyIconWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyIconGlow: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(81, 130, 118, 0.08)',
+    transform: [{ scale: 1.2 }],
+  },
+  emptyIconBg: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#518276',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    elevation: 2,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  resetIcon: {
+    marginRight: 6,
+  },
+  resetButtonText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });
 
-export default ProductCatalogScreen;
+export default DistributorProductCatalog;
