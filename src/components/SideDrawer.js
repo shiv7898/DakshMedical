@@ -10,7 +10,9 @@ import {
     Platform,
     StatusBar,
     Clipboard,
+    Modal,
 } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import LinearGradient from 'react-native-linear-gradient';
@@ -34,6 +36,7 @@ const SideDrawer = (props) => {
     const [patient, setPatient] = useState(null);
     const activeRouteIndex = props.state.index;
     const activeRouteName = props.state.routeNames[activeRouteIndex];
+    const [logoutVisible, setLogoutVisible] = useState(false);
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -77,25 +80,7 @@ const SideDrawer = (props) => {
 
 
     const handleLogout = () => {
-        Alert.alert(
-            "Terminate Session",
-            "Are you sure you want to exit the AirSine ecosystem?",
-            [
-                { text: "STAY", style: "cancel" },
-                {
-                    text: "LOGOUT",
-                    onPress: async () => {
-                        try {
-                            await clearAllData();
-                            props.navigation.replace('Login');
-                        } catch (err) {
-                            props.navigation.replace('Login');
-                        }
-                    },
-                    style: "destructive"
-                }
-            ]
-        );
+        setLogoutVisible(true);
     };
 
     // Use actual referral_code from profile data
@@ -218,19 +203,13 @@ const SideDrawer = (props) => {
                     />
                 ))}
 
-                {/* Promotional Card */}
-                <TouchableOpacity style={styles.promoCard} activeOpacity={0.9}>
-                    <LinearGradient
-                        colors={['rgba(81, 130, 118, 0.1)', 'rgba(71, 119, 106, 0.05)']}
-                        style={styles.promoGradient}
-                    >
-                        <Icon name="rocket-launch-outline" size={24} color="#518276" />
-                        <View style={styles.promoTextContainer}>
-                            <Text style={styles.promoTitle}>Cloud Sync Active</Text>
-                            <Text style={styles.promoSub}>Your data is synchronized</Text>
-                        </View>
-                    </LinearGradient>
-                </TouchableOpacity>
+                {/* Modern Menu Divider */}
+                <LinearGradient
+                    colors={['rgba(226, 232, 240, 0)', 'rgba(81, 130, 118, 0.25)', 'rgba(226, 232, 240, 0)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.modernDivider}
+                />
             </DrawerContentScrollView>
 
             {/* Premium Logout Footer */}
@@ -250,6 +229,39 @@ const SideDrawer = (props) => {
                 </TouchableOpacity>
                 <Text style={styles.versionText}>v2.4.0 • Enterprise Edition</Text>
             </View>
+
+            {/* Premium Logout Modal */}
+            <Modal visible={logoutVisible} transparent animationType="fade">
+                <View style={styles.logoutModalOverlay}>
+                    <View style={styles.logoutModalCard}>
+                        <LottieView
+                            source={require('../assets/animations/Alert Warning Informtion.json')}
+                            autoPlay
+                            loop
+                            style={{ width: 120, height: 120, marginBottom: 10 }}
+                        />
+                        <Text style={styles.logoutModalTitle}>Terminate Session</Text>
+                        <Text style={styles.logoutModalText}>Are you sure you want to exit the Airsine ecosystem?</Text>
+                        
+                        <View style={styles.logoutModalActionRow}>
+                            <TouchableOpacity style={styles.logoutModalCancelBtn} onPress={() => setLogoutVisible(false)}>
+                                <Text style={styles.logoutModalCancelText}>Stay</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.logoutModalConfirmBtn} onPress={async () => {
+                                setLogoutVisible(false);
+                                try {
+                                    await clearAllData();
+                                    props.navigation.replace('Login');
+                                } catch (err) {
+                                    props.navigation.replace('Login');
+                                }
+                            }}>
+                                <Text style={styles.logoutModalConfirmText}>Logout</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -272,6 +284,7 @@ const ModernMenuItem = ({ item, index, isActive, onPress }) => {
     return (
         <Animated.View style={[styles.menuItemWrapper, animatedStyle]}>
             <TouchableOpacity
+           
                 onPress={onPress}
                 onPressIn={() => (scale.value = withSpring(0.97))}
                 onPressOut={() => (scale.value = withSpring(1))}
@@ -499,28 +512,11 @@ const styles = StyleSheet.create({
         borderRadius: 2,
         backgroundColor: '#518276',
     },
-    promoCard: {
-        marginTop: 15,
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-    promoGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-        backgroundColor: 'rgba(241, 130, 118, 0.05)',
-    },
-    promoTextContainer: {
-        marginLeft: 10,
-    },
-    promoTitle: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#518276',
-    },
-    promoSub: {
-        fontSize: 9,
-        color: '#94A3B8',
+    modernDivider: {
+        height: 1.5,
+        marginVertical: 18,
+        marginHorizontal: 12,
+        borderRadius: 1,
     },
     footer: {
         paddingTop: 16,
@@ -578,6 +574,75 @@ const styles = StyleSheet.create({
         marginTop: 15, // Space between button and text
         fontWeight: '700',
         letterSpacing: 0.5,
+    },
+    // Logout Modal Styles
+    logoutModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    logoutModalCard: {
+        width: '85%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+    },
+    logoutModalTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: '#1E293B',
+        marginBottom: 8,
+        textAlign: 'center',
+        letterSpacing: 0.5,
+    },
+    logoutModalText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#64748B',
+        textAlign: 'center',
+        marginBottom: 24,
+        lineHeight: 20,
+    },
+    logoutModalActionRow: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    logoutModalCancelBtn: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 14,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+    },
+    logoutModalCancelText: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#64748B',
+    },
+    logoutModalConfirmBtn: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 14,
+        backgroundColor: '#E11D48',
+        alignItems: 'center',
+        shadowColor: '#E11D48',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    logoutModalConfirmText: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#FFFFFF',
     },
 });
 

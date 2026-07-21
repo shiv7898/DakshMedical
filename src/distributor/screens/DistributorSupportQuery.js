@@ -63,12 +63,13 @@ const DistributorSupportQuery = ({ navigation }) => {
       data.append('email', String(userData?.email || ''));
       data.append('role', 'distributor');
 
-      if (formData.attachments.length > 0) {
-        const file = formData.attachments[0];
-        data.append('image', {
-          uri: file.uri,
-          name: file.name || 'image.jpg',
-          type: file.type || 'image/jpeg',
+      if (formData.attachments && formData.attachments.length > 0) {
+        formData.attachments.forEach((file, index) => {
+          data.append('images', {
+            uri: file.uri,
+            name: file.name || `image_${index}.jpg`,
+            type: file.type || 'image/jpeg',
+          });
         });
       }
 

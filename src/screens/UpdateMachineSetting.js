@@ -8,6 +8,7 @@ import {
   registerDisconnectCallback,
   activeDevice,
   sendWifiCredentials,
+  cancelBluetoothConnection,
 } from '../bluetooth';
 import { saveMachineSettings, getMachineSettings, recreateLogsTableWithData } from '../api/database';
 import { useData } from '../context/DataContext';
@@ -1514,7 +1515,9 @@ const [logEndDate, setLogEndDate] = useState(new Date());
 const [showStartPicker, setShowStartPicker] = useState(false);
 const [showEndPicker, setShowEndPicker] = useState(false);
 
-const [logsModalVisible, setLogsModalVisible] = useState(false);
+  const [logsModalVisible, setLogsModalVisible] = useState(false);
+  const [isAlertVisible, setIsAlertVisible] = useState(false);
+  const [errorModal, setErrorModal] = useState({ visible: false, title: '', message: '' });
 const [downloadedLogs, setDownloadedLogs] = useState([]);
 
 const loadDownloadedLogs = async () => {
@@ -1964,7 +1967,7 @@ const [tempEndDate, setTempEndDate] = useState(new Date());
     }
 
     isCancelledRef.current = false;
-    setBtProcessName('Uploading Settings');
+    setBtProcessName('Uploading Data...');
     setIsSendingBT(true);
     setBtStatus('Starting Bluetooth…');
     try {
@@ -2028,7 +2031,7 @@ const handleSync = async () => {
 
   setSyncPacketModalVisible(false);
   isCancelledRef.current = false;
-  setBtProcessName('Syncing Settings');
+  setBtProcessName('Synchronizing Data...');
   setIsSendingBT(true);
   setBtStatus('Starting Sync…');
   try {
@@ -2071,7 +2074,7 @@ const handleDownloadLogs = async () => {
   }
 
   isCancelledRef.current = false;
-  setBtProcessName('Downloading Logs');
+  setBtProcessName('Downloading Data...');
   setIsSendingBT(true);
   setBtStatus('Downloading logs…');
   try {
@@ -2326,9 +2329,9 @@ const handleShareLogFile = async (file) => {
   const handleBTConnect = async () => {
     if (isSendingBT) return;
     isCancelledRef.current = false;
-    setBtProcessName('Connecting Machine');
+    setBtProcessName('Establishing Connection...');
     setIsSendingBT(true);
-    setBtStatus('Connecting to ESP32...');
+    setBtStatus('Pairing with Airsine Device...');
     const result = await connectToMachine(msg => {
       if (isCancelledRef.current) return;
       console.log('[BT CONNECT]', msg);
@@ -2339,11 +2342,7 @@ const handleShareLogFile = async (file) => {
       setIsBtConnected(true);
     } else {
       setIsBtConnected(false);
-      Alert.alert(
-        '❌ Connection Failed',
-        result.message || 'Could not connect to machine.',
-        [{ text: 'OK' }],
-      );
+      setErrorModal({ visible: true, title: 'Connection Failed', message: result.message || 'Could not connect to machine.' });
     }
     if (!isCancelledRef.current) {
       setIsSendingBT(false);
@@ -2503,10 +2502,10 @@ const handleShareLogFile = async (file) => {
                   <Icon
                     name="bluetooth-off"
                     size={18}
-                    color="#FCA5A5"
+                    color="#FFFFFF"
                     style={styles.tabIcon}
                   />
-                  <Text style={[styles.tabText, { color: '#FCA5A5' }]}>
+                  <Text style={[styles.tabText, { color: '#FFFFFF' }]}>
                     Disconnect
                   </Text>
                 </TouchableOpacity>
@@ -2515,13 +2514,13 @@ const handleShareLogFile = async (file) => {
                   style={[styles.tabItem, styles.syncTab]}
                 >
                   <Icon
-                    name="sync"
+                    name="download"
                     size={18}
                     color="#FFFFFF"
                     style={styles.tabIcon}
                   />
                   <Text style={[styles.tabText, { color: '#FFFFFF' }]}>
-                    Sync
+                    Download
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -2529,13 +2528,13 @@ const handleShareLogFile = async (file) => {
                   style={[styles.tabItem, styles.saveTab]}
                 >
                   <Icon
-                    name="content-save"
+                    name="upload"
                     size={18}
-                    color="#10B981"
+                    color="#FFFFFF"
                     style={styles.tabIcon}
                   />
-                  <Text style={[styles.tabText, { color: '#10B981' }]}>
-                    Save
+                  <Text style={[styles.tabText, { color: '#FFFFFF' }]}>
+                    Upload
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -2545,10 +2544,10 @@ const handleShareLogFile = async (file) => {
                   <Icon
                     name="wifi"
                     size={18}
-                    color="#38BDF8"
+                    color="#FFFFFF"
                     style={styles.tabIcon}
                   />
-                  <Text style={[styles.tabText, { color: '#38BDF8' }]}>
+                  <Text style={[styles.tabText, { color: '#FFFFFF' }]}>
                     WiFi
                   </Text>
                 </TouchableOpacity>
@@ -2559,10 +2558,10 @@ const handleShareLogFile = async (file) => {
                   <Icon
                     name="file-document-outline"
                     size={18}
-                    color="#A855F7"
+                    color="#FFFFFF"
                     style={styles.tabIcon}
                   />
-                  <Text style={[styles.tabText, { color: '#A855F7' }]}>
+                  <Text style={[styles.tabText, { color: '#FFFFFF' }]}>
                     Logs
                   </Text>
                 </TouchableOpacity>
@@ -3097,7 +3096,18 @@ const handleShareLogFile = async (file) => {
       >
         <View style={styles.btOverlay}>
           <View style={styles.btCard}>
-            <ActivityIndicator size="large" color="#518276" />
+            <LottieView
+              source={
+                btProcessName.includes('Connection') || 
+                btProcessName.includes('Disconnecting') || 
+                btProcessName.includes('WiFi')
+                  ? require('../assets/animations/Bluetooth.json')
+                  : require('../assets/animations/uploading.json')
+              }
+              autoPlay
+              loop
+              style={{ width: 120, height: 120, marginBottom: 3 }}
+            />
             <Text style={styles.btCardTitle}>{btProcessName}</Text>
             <Text style={styles.btCardStatus}>{btStatus}</Text>
             <TouchableOpacity
@@ -3105,6 +3115,7 @@ const handleShareLogFile = async (file) => {
                 isCancelledRef.current = true;
                 setIsSendingBT(false);
                 setBtStatus('');
+                cancelBluetoothConnection();
               }}
               style={styles.btCancelBtn}
             >
@@ -3113,6 +3124,26 @@ const handleShareLogFile = async (file) => {
           </View>
         </View>
       </Modal>
+
+      {/* Modern Error Modal */}
+      <Modal visible={errorModal.visible} transparent animationType="fade">
+        <View style={styles.errorModalOverlay}>
+          <View style={styles.errorModalCard}>
+            <LottieView
+              source={require('../assets/animations/Alert Warning Informtion.json')}
+              autoPlay
+              loop
+              style={{ width: 100, height: 100, marginBottom: 8 }}
+            />
+            <Text style={styles.errorModalTitle}>{errorModal.title}</Text>
+            <Text style={styles.errorModalMessage}>{errorModal.message}</Text>
+            <TouchableOpacity style={styles.errorModalBtn} onPress={() => setErrorModal({ ...errorModal, visible: false })}>
+              <Text style={styles.errorModalBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -3204,24 +3235,24 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tabText: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    // fontWeight: '1000',
     letterSpacing: 0.3,
   },
   disconnectTab: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   syncTab: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   saveTab: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   wifiTab: {
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   logsTab: {
-    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   content: { flex: 1, padding: 20 },
   // Main menu grid
@@ -4100,6 +4131,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  // Modern Error Modal Styles
+  errorModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  errorModalCard: { width: '75%', backgroundColor: '#FFFFFF', borderRadius: 28, paddingHorizontal: 20, paddingVertical: 24, alignItems: 'center', elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24 },
+  errorModalTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginBottom: 6, textAlign: 'center', letterSpacing: 0.5 },
+  errorModalMessage: { fontSize: 13, fontWeight: '500', color: '#64748B', textAlign: 'center', marginBottom: 20, lineHeight: 18 },
+  errorModalBtn: { backgroundColor: '#EF4444', paddingVertical: 12, paddingHorizontal: 32, borderRadius: 16, width: '100%', alignItems: 'center', elevation: 2, shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  errorModalBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', letterSpacing: 1 },
 });
 
 export default UpdateMachineSetting;

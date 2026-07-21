@@ -9,7 +9,9 @@ import {
     Alert,
     Platform,
     Clipboard,
+    Modal,
 } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import LinearGradient from 'react-native-linear-gradient';
@@ -29,36 +31,10 @@ const { width } = Dimensions.get('window');
 const DistributorSideDrawer = (props) => {
     const { userData, setToken, setUserData, setUserRole } = useData();
     const insets = useSafeAreaInsets();
+    const [logoutVisible, setLogoutVisible] = useState(false);
 
     const handleLogout = () => {
-        setTimeout(() => {
-            Alert.alert(
-                "Logout Portal", 
-                "Are you sure you want to exit the distributor console?", 
-                [
-                    { text: "Cancel", style: "cancel" },
-                    { 
-                        text: "LOGOUT", 
-                        style: "destructive", 
-                        onPress: async () => {
-                            try {
-                                await clearAllData();
-                                setToken(null);
-                                setUserData(null);
-                                setUserRole('patient');
-                                
-                                props.navigation.reset({
-                                    index: 0,
-                                    routes: [{ name: 'Login' }],
-                                });
-                            } catch (error) {
-                                console.error("Logout Error:", error);
-                            }
-                        }
-                    }
-                ]
-            );
-        }, 100);
+        setLogoutVisible(true);
     };
 
     const getActiveRouteName = (state) => {
@@ -187,6 +163,46 @@ const DistributorSideDrawer = (props) => {
                 </TouchableOpacity>
                 <Text style={styles.versionText}>v2.4.0 • Partner Edition</Text>
             </View>
+
+            {/* Premium Logout Modal */}
+            <Modal visible={logoutVisible} transparent animationType="fade">
+                <View style={styles.logoutModalOverlay}>
+                    <View style={styles.logoutModalCard}>
+                        <LottieView
+                            source={require('../../assets/animations/Alert Warning Informtion.json')}
+                            autoPlay
+                            loop
+                            style={{ width: 120, height: 120, marginBottom: 10 }}
+                        />
+                        <Text style={styles.logoutModalTitle}>Logout Portal</Text>
+                        <Text style={styles.logoutModalText}>Are you sure you want to exit the distributor console?</Text>
+                        
+                        <View style={styles.logoutModalActionRow}>
+                            <TouchableOpacity style={styles.logoutModalCancelBtn} onPress={() => setLogoutVisible(false)}>
+                                <Text style={styles.logoutModalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.logoutModalConfirmBtn} onPress={async () => {
+                                setLogoutVisible(false);
+                                try {
+                                    await clearAllData();
+                                    setToken(null);
+                                    setUserData(null);
+                                    setUserRole('patient');
+                                    
+                                    props.navigation.reset({
+                                        index: 0,
+                                        routes: [{ name: 'Login' }],
+                                    });
+                                } catch (error) {
+                                    console.error("Logout Error:", error);
+                                }
+                            }}>
+                                <Text style={styles.logoutModalConfirmText}>Logout</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -252,6 +268,16 @@ const styles = StyleSheet.create({
     logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: '#FFF1F2', borderRadius: 15, borderWidth: 1, borderColor: '#FFE4E6' },
     logoutLabel: { fontSize: 14, fontWeight: 'bold', color: '#E11D48', marginLeft: 10 },
     versionText: { textAlign: 'center', fontSize: 10, color: '#94A3B8', marginTop: 15, fontWeight: '700' },
+    // Logout Modal Styles
+    logoutModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+    logoutModalCard: { width: '85%', backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, alignItems: 'center', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20 },
+    logoutModalTitle: { fontSize: 20, fontWeight: '900', color: '#1E293B', marginBottom: 8, textAlign: 'center', letterSpacing: 0.5 },
+    logoutModalText: { fontSize: 14, fontWeight: '500', color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+    logoutModalActionRow: { flexDirection: 'row', gap: 12, width: '100%' },
+    logoutModalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, backgroundColor: '#F1F5F9', alignItems: 'center' },
+    logoutModalCancelText: { fontSize: 15, fontWeight: '800', color: '#64748B' },
+    logoutModalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 14, backgroundColor: '#E11D48', alignItems: 'center', shadowColor: '#E11D48', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+    logoutModalConfirmText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
 });
 
 export default DistributorSideDrawer;

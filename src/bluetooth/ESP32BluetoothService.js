@@ -103,22 +103,54 @@ const findESP32Device = async () => {
   return target;
 };
 
+let isConnectCancelled = false;
+
+export const cancelBluetoothConnection = () => {
+  isConnectCancelled = true;
+};
+
 // ── Connection with Retry ─────────────────────────────────────────────────────
-const connectWithRetry = async device => {
+const connectWithRetry = async (device, onStatus) => {
+  isConnectCancelled = false;
   for (let attempt = 1; attempt <= CONNECT_RETRIES; attempt++) {
+    if (isConnectCancelled) throw new Error('Cancelled by user');
     try {
+      if (onStatus) onStatus(`Connecting attempt ${attempt}/${CONNECT_RETRIES}...`);
       console.log(`[BT] 🔌 Connect attempt ${attempt}/${CONNECT_RETRIES}…`);
       const isConn = await device.isConnected().catch(() => false);
       if (isConn) {
         await device.disconnect().catch(() => {});
         await delay(600);
       }
-      await device.connect({ DELIMITER: '', DEVICE_CHARSET: 'latin1' });
+      const connectPromise = device.connect({ DELIMITER: '', DEVICE_CHARSET: 'latin1' });
+      const timeoutPromise = new Promise((_, reject) => {
+        let elapsed = 0;
+        const interval = setInterval(() => {
+          elapsed += 200;
+          if (isConnectCancelled) { clearInterval(interval); reject(new Error('Cancelled by user')); }
+          if (elapsed >= 5000) { clearInterval(interval); reject(new Error('Connection Timeout')); }
+        }, 200);
+      });
+      await Promise.race([connectPromise, timeoutPromise]);
+      
       console.log('[BT] ✅ Connected to', device.name);
       return device;
     } catch (err) {
       console.warn(`[BT] Attempt ${attempt} failed:`, err.message);
-      if (attempt < CONNECT_RETRIES) await delay(1200);
+      if (err.message === 'Cancelled by user') {
+         await device.disconnect().catch(() => {});
+         throw err;
+      }
+      if (err.message === 'Connection Timeout') {
+         // Attempt to cancel stuck connection
+         await device.disconnect().catch(() => {});
+      }
+      if (attempt < CONNECT_RETRIES) {
+         for (let i = 0; i < 50; i++) {
+           if (isConnectCancelled) throw new Error('Cancelled by user');
+           await delay(100);
+         }
+      }
     }
   }
   throw new Error(
@@ -355,8 +387,8 @@ export const connectToMachine = async (onStatus = () => {}) => {
     onStatus(`Searching for "${DEVICE_NAME}"…`);
     const foundDevice = await findESP32Device();
 
-    onStatus('Connecting…');
-    activeDevice = await connectWithRetry(foundDevice);
+    onStatus(`Connecting attempt 1/${CONNECT_RETRIES}...`);
+    activeDevice = await connectWithRetry(foundDevice, onStatus);
     await delay(600);
 
     // Setup disconnect subscription

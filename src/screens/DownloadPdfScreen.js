@@ -16,6 +16,7 @@ import {
     Animated,
     StatusBar,
     Modal,
+    PermissionsAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import LinearGradient from 'react-native-linear-gradient';
@@ -24,6 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ENDPOINTS } from '../api/apiConfig';
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
+import notifee, { AndroidImportance, EventType, AndroidStyle } from '@notifee/react-native';
 import { WebView } from 'react-native-webview';
 
 const getPdfJsHtml = (base64Data) => `
@@ -60,7 +62,7 @@ const getPdfJsHtml = (base64Data) => `
       gap: 16px;
     }
     canvas {
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
       border-radius: 8px;
       background-color: #FFFFFF;
       max-width: 100%;
@@ -372,7 +374,28 @@ const RecordCard = ({ record, index, days, token, navigation, onPreview }) => {
             }).promise;
 
             if (res.statusCode === 200) {
-                Alert.alert('✅ Downloaded!', `Saved to:\nDownloads/${fileName}`);
+                await showDownloadNotification(fileName, downloadPath);
+                Alert.alert(
+                    '✅ Report Saved!',
+                    `PDF saved to Downloads folder:\n${fileName}`,
+                    [
+                        { text: 'OK' },
+                        {
+                            text: 'Open PDF',
+                            onPress: async () => {
+                                try {
+                                    await Share.open({
+                                        url: 'file://' + downloadPath,
+                                        type: 'application/pdf',
+                                        title: 'Airsine Report',
+                                    });
+                                } catch (err) {
+                                    console.log('Share Error:', err);
+                                }
+                            },
+                        },
+                    ],
+                );
             } else {
                 Alert.alert('Download Failed', `Server returned status ${res.statusCode}`);
             }
@@ -524,6 +547,58 @@ const rc = StyleSheet.create({
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
+
+const requestNotificationPermission = async () => {
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+        const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    return true;
+};
+
+const showDownloadNotification = async (fileName, filePath) => {
+    try {
+        const hasPermission = await requestNotificationPermission();
+        if (!hasPermission) {
+            console.warn('Notification permission denied');
+            return;
+        }
+        const channelId = await notifee.createChannel({
+            id: 'pdf_downloads',
+            name: 'PDF Downloads',
+            description: 'Notifications for downloaded PDF reports',
+            importance: AndroidImportance.HIGH,
+            sound: 'default',
+            vibration: true,
+        });
+
+        await notifee.displayNotification({
+            title: '✅ Report Downloaded Successfully',
+            body: `📄 ${fileName}\nSaved to Downloads folder. Tap to open.`,
+            data: {
+                filePath: filePath,
+            },
+            android: {
+                channelId,
+                smallIcon: 'ic_launcher',
+                importance: AndroidImportance.HIGH,
+                pressAction: {
+                    id: 'open_pdf',
+                    launchActivity: 'default',
+                },
+                style: {
+                    type: AndroidStyle.BIGTEXT,
+                    text: `📄 ${fileName}\nSaved to Downloads folder. Tap to open.`,
+                },
+            },
+        });
+    } catch (error) {
+        console.error('Notification Error:', error);
+    }
+};
+
 const DownloadPdfScreen = ({ navigation }) => {
     const { token } = useData();
     const [loading, setLoading] = useState(false);
@@ -535,6 +610,22 @@ const DownloadPdfScreen = ({ navigation }) => {
     const [previewVisible, setPreviewVisible] = useState(false);
     const [previewHtml, setPreviewHtml] = useState('');
     const [previewTitle, setPreviewTitle] = useState('Report Preview');
+
+    useEffect(() => {
+        const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+            if (type === EventType.PRESS) {
+                const filePath = detail.notification?.data?.filePath;
+                if (filePath) {
+                    Share.open({
+                        url: filePath.startsWith('file://') ? filePath : 'file://' + filePath,
+                        type: 'application/pdf',
+                        title: 'Open Airsine Report',
+                    }).catch(err => console.log('Foreground notification open PDF error:', err));
+                }
+            }
+        });
+        return unsubscribe;
+    }, []);
 
     useEffect(() => {
         Animated.timing(headerOpacity, { toValue: 1, duration: 600, useNativeDriver: true }).start();

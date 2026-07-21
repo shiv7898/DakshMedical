@@ -59,12 +59,13 @@ const SupportQueryScreen = ({ navigation }) => {
             data.append('message', formData.query.trim());
             data.append('platform', Platform.OS);
 
-            if (formData.attachments.length > 0) {
-                const file = formData.attachments[0];
-                data.append('image', {
-                    uri: file.uri,
-                    name: file.name || 'image.jpg',
-                    type: file.type || 'image/jpeg',
+            if (formData.attachments && formData.attachments.length > 0) {
+                formData.attachments.forEach((file, index) => {
+                    data.append('images', {
+                        uri: file.uri,
+                        name: file.name || `image_${index}.jpg`,
+                        type: file.type || 'image/jpeg',
+                    });
                 });
             }
 

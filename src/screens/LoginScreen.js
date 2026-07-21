@@ -16,7 +16,9 @@ import {
     Image,
     useWindowDimensions,
     ActivityIndicator,
+    Modal,
 } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { Colors } from '../styles/theme';
 import { User, Lock, ArrowRight, ShieldCheck, Eye, EyeOff } from 'lucide-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -35,6 +37,25 @@ const LoginScreen = ({ navigation }) => {
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+
+    // Custom Alert State
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'error',
+        onClose: null,
+    });
+
+    const showAlert = (title, message, type = 'error', onClose = null) => {
+        setAlertConfig({ visible: true, title, message, type, onClose });
+    };
+
+    const hideAlert = () => {
+        const { onClose } = alertConfig;
+        setAlertConfig(prev => ({ ...prev, visible: false }));
+        if (onClose) onClose();
+    };
 
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -115,95 +136,31 @@ const LoginScreen = ({ navigation }) => {
         };
     }, []);
 
-    // const handleLogin = async () => {
-    //     if (!username || !password) {
-    //         Alert.alert('Incomplete Credentials', 'Please enter your username and password to continue.');
-    //         return;
-    //     }
-
-    //     setLoading(true);
-
-    //     try {
-    //         // --- DUMMY API CALL START ---
-    //         // Simulating a POST request to an authentication endpoint
-    //         const ApiUrl = 'http://192.168.14.21:8000/login'; // Placeholder URL
-    //         const payload = {
-    //             username: username,
-    //             password: password,
-    //             timestamp: new Date().toISOString(),
-    //             device: Platform.OS
-    //         };
-
-    //         console.log('--- EXECUTING DUMMY API CALL ---');
-    //         console.log('URL:', ApiUrl);
-    //         console.log('Payload:', payload);
-
-    //         const response = await fetch(ApiUrl, {
-    //             method: 'POST',
-    //             headers: {
-    //                 'Content-Type': 'application/json',
-    //             },
-    //             body: JSON.stringify(payload),
-    //         });
-
-    //         const data = await response.json();
-    //         console.log('Dummy API Response:', data);
-    //         // --- DUMMY API CALL END ---
-
-    //         // Simulate network latency
-    //         await new Promise(resolve => setTimeout(resolve, 1500));
-
-    //         // Logic to determine role based on dummy credentials or local bypass
-    //         if (username.toLowerCase() === 'p' && password === 'p') {
-    //             setUserRole('patient');
-    //             navigation.replace('MainTabs');
-    //         } else if (username.toLowerCase() === 'd' && password === 'd') {
-    //             setUserRole('doctor');
-    //             navigation.replace('MainTabs');
-    //         } else if (username.toLowerCase() === 'a' && password === 'A') {
-    //             setUserRole('patient');
-    //             navigation.replace('MainTabs');
-    //         } else {
-    //             // For dummy purposes, let's allow any login if we want, or keep strict check
-    //             // Here we keep the existing check but inform about API success
-    //             Alert.alert('Access Denied', 'API Authenticated successfully (Mock), but role mapping failed. Use p/p for Patient or d/d for Doctor.');
-    //         }
-    //     } catch (error) {
-    //         console.error('API Error:', error);
-    //         Alert.alert('Connection Error', 'Failed to reach the authentication server. Please try again later.');
-    //     } finally {
-    //         setLoading(false);
-    //     }
-    // };
     const handleLogin = async () => {
         if (!username || !password) {
-            Alert.alert('Error', 'Please enter email and password');
+            showAlert('Error', 'Please enter email and password', 'error');
             return;
         }
         try {
             setLoading(true);
 
-
-
             // LOGIN API
-
             const loginResponse = await fetch(ENDPOINTS.LOGIN, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    email: username,     // input field email use ho raha hai
+                    email: username,
                     password: password,
                 }),
             });
 
             const loginData = await loginResponse.json();
-
             console.log('Login Response =>', loginData);
 
             if (!loginResponse.ok) {
-                Alert.alert('Login Failed', loginData.detail || 'Invalid Credentials');
+                showAlert('Login Failed', loginData.detail || 'Invalid Credentials', 'error');
                 return;
             }
 
@@ -224,19 +181,17 @@ const LoginScreen = ({ navigation }) => {
                 },
             });
 
-
             const profileData = await profileResponse.json();
-
             console.log('Role API Response profile =>', profileData);
 
             if (!profileResponse.ok) {
-                Alert.alert('Error', profileData.detail || 'Unauthorized');
+                showAlert('Error', profileData.detail || 'Unauthorized', 'error');
                 return;
             }
 
-            // DATA SAVE KARNA HO TO KAR SAKTE HO
+            // DATA SAVE
             global.userData = profileData;
-            setUserData(profileData); // Save to context for immediate UI update
+            setUserData(profileData); 
 
             // PERSIST TO LOCAL DATABASE
             try {
@@ -249,65 +204,19 @@ const LoginScreen = ({ navigation }) => {
                 console.log('DB SAVE ERROR =>', dbError);
             }
 
-            // NEXT SCREEN
-            navigation.replace('MainTabs');
+            // Success Alert
+            showAlert('Login Successful', 'Welcome back to Airsine!', 'success', () => {
+                navigation.replace('MainTabs');
+            });
 
         } catch (error) {
             console.log('API ERROR =>', error);
-            Alert.alert('Error', 'Server not responding');
+            showAlert('Connection Error', 'Server not responding', 'error');
         } finally {
             setLoading(false);
         }
     };
-    // const handleLogin = async () => {
-    //   try {
-    //     setLoading(true);
 
-    //     let role = 'patient';
-    //     let user = {
-    //       name: 'Test Patient',
-    //       email: 'patient@gmail.com',
-    //       role: 'patient',
-    //     };
-
-    //     if (username.toLowerCase() === 'distributor' && password === 'distributor') {
-    //       role = 'distributor';
-    //       user = {
-    //         name: 'Airsine Distributor',
-    //         email: 'distributor@airsine.io',
-    //         role: 'distributor',
-    //       };
-    //     } else if (username.toLowerCase() === 'd' && password === 'd') {
-    //       role = 'doctor';
-    //       user = {
-    //         name: 'Dr. Sameer',
-    //         email: 'doctor@gmail.com',
-    //         role: 'doctor',
-    //       };
-    //     } else if (username.toLowerCase() === 'p' && password === 'p') {
-    //       role = 'patient';
-    //       user = {
-    //         name: 'Test Patient',
-    //         email: 'patient@gmail.com',
-    //         role: 'patient',
-    //       };
-    //     }
-
-    //     // Set context values
-    //     setUserRole(role);
-    //     setToken('test-token');
-    //     setUserData(user);
-    //     global.userData = user;
-
-    //     // Direct Dashboard / MainTabs
-    //     navigation.replace('MainTabs');
-
-    //   } catch (error) {
-    //     console.log(error);
-    //   } finally {
-    //     setLoading(false);
-    //   }
-    // };
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -460,6 +369,41 @@ const LoginScreen = ({ navigation }) => {
                     </ScrollView>
                 </KeyboardAvoidingView>
             </SafeAreaView>
+
+            {/* Custom Alert Modal */}
+            <Modal
+                visible={alertConfig.visible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={hideAlert}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <LottieView
+                            source={
+                                alertConfig.type === 'error'
+                                    ? require('../assets/animations/No Entry.json')
+                                    : require('../assets/animations/Success.json')
+                            }
+                            autoPlay
+                            loop={false}
+                            style={styles.lottieIcon}
+                        />
+                        <Text style={styles.modalTitle}>{alertConfig.title}</Text>
+                        <Text style={styles.modalMessage}>{alertConfig.message}</Text>
+                        
+                        <TouchableOpacity
+                            style={[styles.modalButton, alertConfig.type === 'success' && styles.modalButtonSuccess]}
+                            onPress={hideAlert}
+                            activeOpacity={0.9}
+                        >
+                            <Text style={styles.modalButtonText}>
+                                {alertConfig.type === 'success' ? 'Continue' : 'Try Again'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -686,6 +630,71 @@ const styles = StyleSheet.create({
         color: 'rgba(15, 93, 86, 0.5)',
         letterSpacing: 2,
         marginTop: 4,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.55)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '75%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 28,
+        paddingHorizontal: 20,
+        paddingVertical: 24,
+        alignItems: 'center',
+        elevation: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+    },
+    lottieIcon: {
+        width: 100,
+        height: 100,
+        marginBottom: 8,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginBottom: 6,
+        textAlign: 'center',
+        letterSpacing: 0.5,
+    },
+    modalMessage: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: '#64748B',
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 18,
+    },
+    modalButton: {
+        backgroundColor: '#EF4444',
+        paddingVertical: 12,
+        paddingHorizontal: 32,
+        borderRadius: 16,
+        width: '100%',
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+                   
+    transform: [{ scale: 0.97 }],
+    },
+    modalButtonSuccess: {
+        backgroundColor: '#518276',
+        shadowColor: '#10B981',
+    },
+    modalButtonText: {
+        color: '#ffffffff',
+        fontSize: 14,
+        fontWeight: '700',
+        letterSpacing: 1,
     },
 });
 

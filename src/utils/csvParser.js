@@ -39,7 +39,7 @@ const parseNewLogFormat = (rawText) => {
     const rows = [];
     for (const line of lines) {
         const parts = line.split(',').map(p => p.trim());
-        if (parts.length < 13) continue; // Min length for CPAP/T mode
+        if (parts.length < 14) continue; // Min length for CPAP/T mode
 
         const tsStr = parts[0];
         const timeVal = parseTimestamp(tsStr);
@@ -59,7 +59,7 @@ const parseNewLogFormat = (rawText) => {
         let iPap = 0, ePap = 0, iTrigger = 0, eTrigger = 0, pRise = 0, tiMin = 0, tiMax = 0;
         let breathRate = 0, ieRatio = 0, iPapMax = 0, iPapMin = 0, vt = 0;
 
-        const readNext = () => currentIndex < (parts.length - 7) ? parseFloat(parts[currentIndex++]) : 0;
+        const readNext = () => currentIndex < (parts.length - 8) ? parseFloat(parts[currentIndex++]) : 0;
 
         switch (mode) {
             case 1: // CPAP
@@ -115,11 +115,12 @@ const parseNewLogFormat = (rawText) => {
                 break;
         }
 
-        currentIndex = parts.length - 7;
+        currentIndex = parts.length - 8;
         const setAvgP = parseFloat(parts[currentIndex++]);
         const measAvgP = parseFloat(parts[currentIndex++]);
+        const measAvgFlow = parseFloat(parts[currentIndex++]);
         const avgLeak = parseFloat(parts[currentIndex++]);
-        const actualRespRate = parseFloat(parts[currentIndex++]) || 0; // 4th from last
+        const actualRespRate = parseFloat(parts[currentIndex++]) || 0; // 5th from last
         const apneaStatus = parseInt(parts[currentIndex++], 10);
         const apneaType = parseInt(parts[currentIndex++], 10);
         const maskOpen = parseInt(parts[currentIndex++], 10);
@@ -147,6 +148,7 @@ const parseNewLogFormat = (rawText) => {
             iPapMin,
             setAvgP,
             measAvgP,
+            measAvgFlow,
             avgLeak,
             apneaStatus,
             apneaType,
@@ -174,6 +176,7 @@ const parseNewLogFormat = (rawText) => {
 
         let sumMeasAvgP = 0, dayMaxP = 0, dayMinP = 999;
         let sumSetAvgP = 0, sumLeak = 0, validLeakCount = 0, sumRespRate = 0, validRespRateCount = 0;
+        let sumMeasAvgFlow = 0;
         let apneas = 0, obstructives = 0, centrals = 0, hypopneas = 0, openMasks = 0;
 
         let cpapCount = 0, apapCount = 0, sCount = 0, tCount = 0, stCount = 0, vapsCount = 0;
@@ -188,6 +191,7 @@ const parseNewLogFormat = (rawText) => {
 
         for (const r of dayRows) {
             sumMeasAvgP += r.measAvgP;
+            sumMeasAvgFlow += r.measAvgFlow || 0;
             if (r.measAvgP > dayMaxP) dayMaxP = r.measAvgP;
             if (r.measAvgP < dayMinP) dayMinP = r.measAvgP;
             
@@ -249,6 +253,7 @@ const parseNewLogFormat = (rawText) => {
         const therapyType = modesUsed.length > 0 ? modesUsed.join(', ') : 'CPAP';
 
         const avgMeasP = totalMinutes > 0 ? parseFloat((sumMeasAvgP / totalMinutes).toFixed(2)) : 0;
+        const avgMeasFlow = totalMinutes > 0 ? parseFloat((sumMeasAvgFlow / totalMinutes).toFixed(2)) : 0;
         const avgSetP = totalMinutes > 0 ? parseFloat((sumSetAvgP / totalMinutes).toFixed(2)) : 0;
         const finalMinP = dayMinP === 999 ? 0 : parseFloat(dayMinP.toFixed(2));
         const finalMaxP = parseFloat(dayMaxP.toFixed(2));
@@ -290,7 +295,7 @@ const parseNewLogFormat = (rawText) => {
             ipap_max: vapsCount > 0 ? parseFloat((sumIPapMax / vapsCount).toFixed(2)) : 0,
             ipap_min: vapsCount > 0 ? parseFloat((sumIPapMin / vapsCount).toFixed(2)) : 0,
             cpap_pressure: cpapCount > 0 ? parseFloat((sumCpapP / cpapCount).toFixed(2)) : 0,
-            avg_flow: 0, 
+            avg_flow: avgMeasFlow, 
             leak_rate: avgLeakDay,
             large_leak_percent: 0,
             avg_resp_rate: avgRespRateDay,

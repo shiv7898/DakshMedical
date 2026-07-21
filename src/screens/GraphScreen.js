@@ -357,7 +357,7 @@ const GraphScreen = ({ navigation }) => {
                 <View style={{ height: 20 }} />
 
                 {/* ─── SECTION: Pressure Profiles ─── */}
-                {(() => {
+                {false && (() => {
                     // 9 days graphs are always shown regardless of selection
                     const filteredLogs = [...logs].slice(0, 9);
                     const rangeLabel = "9-Day Profile";

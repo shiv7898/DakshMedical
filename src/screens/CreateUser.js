@@ -381,6 +381,7 @@ const CreateUser = ({ navigation }) => {
                                                 <TextInput
                                                     style={styles.input}
                                                     placeholder="Hospital / Clinic Name"
+                                                    placeholderTextColor="#94A3B8"
                                                     value={formData.hospital}
                                                     onChangeText={(v) => updateForm('hospital', v)}
                                                     onFocus={() => setFocusField('hospital')}
@@ -393,6 +394,7 @@ const CreateUser = ({ navigation }) => {
                                                     <TextInput
                                                         style={styles.input}
                                                         placeholder="Specialization"
+                                                        placeholderTextColor="#94A3B8"
                                                         value={formData.specialization}
                                                         onChangeText={(v) => updateForm('specialization', v)}
                                                         onFocus={() => setFocusField('specialization')}
@@ -404,6 +406,7 @@ const CreateUser = ({ navigation }) => {
                                                     <TextInput
                                                         style={styles.input}
                                                         placeholder="Qualification"
+                                                        placeholderTextColor="#94A3B8"
                                                         value={formData.qualification}
                                                         onChangeText={(v) => updateForm('qualification', v)}
                                                         onFocus={() => setFocusField('qualification')}
@@ -416,6 +419,7 @@ const CreateUser = ({ navigation }) => {
                                                 <TextInput
                                                     style={styles.input}
                                                     placeholder="Experience (in years)"
+                                                    placeholderTextColor="#94A3B8"
                                                     value={formData.experience}
                                                     onChangeText={(v) => updateForm('experience', v)}
                                                     onFocus={() => setFocusField('experience')}
@@ -434,6 +438,7 @@ const CreateUser = ({ navigation }) => {
                                                 <TextInput
                                                     style={styles.input}
                                                     placeholder="Company / Shop Name"
+                                                    placeholderTextColor="#94A3B8"
                                                     value={formData.companyName}
                                                     onChangeText={(v) => updateForm('companyName', v)}
                                                     onFocus={() => setFocusField('companyName')}
@@ -446,6 +451,7 @@ const CreateUser = ({ navigation }) => {
                                                     <TextInput
                                                         style={styles.input}
                                                         placeholder="Business Type"
+                                                        placeholderTextColor="#94A3B8"
                                                         value={formData.businessType}
                                                         onChangeText={(v) => updateForm('businessType', v)}
                                                         onFocus={() => setFocusField('businessType')}
@@ -467,6 +473,7 @@ const CreateUser = ({ navigation }) => {
                                                 <TextInput
                                                     style={styles.input}
                                                     placeholder="License Number"
+                                                    placeholderTextColor="#94A3B8"
                                                     value={formData.licenseNumber}
                                                     onChangeText={(v) => updateForm('licenseNumber', v)}
                                                     onFocus={() => setFocusField('licenseNumber')}
@@ -495,6 +502,7 @@ const CreateUser = ({ navigation }) => {
                                         <TextInput
                                             style={styles.input}
                                             placeholder="Email ID"
+                                            placeholderTextColor="#94A3B8"
                                             value={formData.email}
                                             onChangeText={(v) => updateForm('email', v)}
                                             onFocus={() => setFocusField('email')}
@@ -509,6 +517,7 @@ const CreateUser = ({ navigation }) => {
                                         <TextInput
                                             style={styles.input}
                                             placeholder="Phone Number"
+                                            placeholderTextColor="#94A3B8"
                                             value={formData.phone}
                                             onChangeText={(v) => updateForm('phone', v)}
                                             onFocus={() => setFocusField('phone')}
@@ -537,6 +546,7 @@ const CreateUser = ({ navigation }) => {
                                             <TextInput
                                                 style={styles.input}
                                                 placeholder="Age"
+                                                placeholderTextColor="#94A3B8"
                                                 value={formData.age}
                                                 onChangeText={(v) => updateForm('age', v)}
                                                 onFocus={() => setFocusField('age')}
@@ -636,6 +646,7 @@ const CreateUser = ({ navigation }) => {
                                         <TextInput
                                             style={styles.input}
                                             placeholder="Password"
+                                            placeholderTextColor="#94A3B8"
                                             value={formData.password}
                                             onChangeText={(v) => updateForm('password', v)}
                                             onFocus={() => {
@@ -656,6 +667,7 @@ const CreateUser = ({ navigation }) => {
                                         <TextInput
                                             style={styles.input}
                                             placeholder="Confirm Password"
+                                            placeholderTextColor="#94A3B8"
                                             value={formData.confirmPassword}
                                             onChangeText={(v) => updateForm('confirmPassword', v)}
                                             onFocus={() => {
@@ -782,7 +794,7 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 13,
         fontWeight: '700',
-        color: '#1E293B',
+        color: '#071f46ff',
         paddingVertical: 8,
     },
     inputText: {

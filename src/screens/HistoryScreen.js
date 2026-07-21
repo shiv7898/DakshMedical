@@ -100,7 +100,7 @@ const HistoryScreen = () => {
                         </View>
                     </View>
                     <View style={[styles.machineBadge, { backgroundColor: '#F8FAFC' }]}>
-                        <Text style={styles.machineText}>{item.machine_type}</Text>
+                        <Text style={styles.machineText}>Airsine</Text>
                     </View>
                 </View>
 
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: Spacing.m,
-        paddingBottom: 40,
+        paddingBottom: 120,
     },
     logCard: {
         backgroundColor: '#FFFFFF',

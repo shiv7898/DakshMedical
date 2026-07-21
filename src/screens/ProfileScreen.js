@@ -657,15 +657,7 @@ const ProfileScreen = ({ navigation, route }) => {
 
                     {/* ── Personal Information (Visible to both Patient & Doctor) ── */}
                     <SectionCard title="Personal Information" iconName="account-outline">
-                        {userRole === 'patient' && (
-                            <FieldRow
-                                label="Patient ID"
-                                icon="identifier"
-                                placeholder="e.g. 01"
-                                keyboardType="default"
-                                {...fp('patient_custom_id')}
-                            />
-                        )}
+
                         <FieldRow
                             label={userRole === 'doctor' ? "Contact Name" : "Full Name"}
                             icon="account-details-outline"

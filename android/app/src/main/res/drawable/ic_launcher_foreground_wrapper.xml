@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Foreground already has 18dp padding baked into the PNG (logo in 72dp safe zone) -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Center the logo and shrink it to stay in the 'safe zone' -->
-    <item
-        android:drawable="@mipmap/ic_launcher_foreground"
-        android:gravity="center"
-        android:top="21dp"
-        android:bottom="21dp"
-        android:left="21dp"
-        android:right="21dp" />
+    <item android:drawable="@mipmap/ic_launcher_foreground" />
 </layer-list>

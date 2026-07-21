@@ -12,6 +12,7 @@ import {
     Platform,
     StatusBar,
     Switch,
+    Modal,
 } from 'react-native';
 import RNHTMLtoPDF from 'react-native-html-to-pdf';
 import * as DocumentPicker from '@react-native-documents/picker';
@@ -23,10 +24,9 @@ import { parseCSV } from '../utils/csvParser';
 import { recreateLogsTableWithData } from '../api/database';
 import { useData } from '../context/DataContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const ImportLogScreen = ({ route, navigation }) => {
-    const { machineType } = route.params;
+
+const ImportLogScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(false);
     const [availableModes, setAvailableModes] = useState([]);
     const { selectedModes, setSelectedModes } = useData();
@@ -35,7 +35,7 @@ const ImportLogScreen = ({ route, navigation }) => {
     const [importSummaryText, setImportSummaryText] = useState('');
 
     const handleSkip = () => {
-        navigation.navigate('MainTabs');
+        navigation.navigate('Home');
     };
 
     const handlePickFile = async () => {
@@ -73,7 +73,6 @@ const ImportLogScreen = ({ route, navigation }) => {
 
             const formattedData = parsedData.map(item => ({
                 ...item,
-                machine_type: machineType,
                 patient_id: 1,
             }));
 
@@ -104,6 +103,7 @@ const ImportLogScreen = ({ route, navigation }) => {
             const modesArray = Array.from(modesSet);
             setAvailableModes(modesArray);
             setSelectedModes(modesArray); // pre-select all available modes
+            setLoading(false);
             setShowModesModal(true); // Open the custom selection modal instead of simple Alert.alert
         } catch (err) {
             setLoading(false);
@@ -155,15 +155,14 @@ const ImportLogScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.content}>
                     <View style={styles.iconCircle}>
-                        <Icon name="cloud-upload-outline" size={SCREEN_WIDTH * 0.15} color={Colors.primary} />
+                        <Icon name="cloud-upload-outline" size={60} color={Colors.primary} />
                     </View>
 
                     <Text style={styles.title}>Clinical Data Import</Text>
                     <Text style={styles.subtitle}>
-                        Device Mode: <Text style={{ color: Colors.primary, fontWeight: 'bold' }}>{machineType}</Text>{'\n'}
                         Upload the clinical log file from your SD card.
                     </Text>
 
@@ -179,59 +178,62 @@ const ImportLogScreen = ({ route, navigation }) => {
                         </TouchableOpacity>
                     )}
 
-                    {/* Therapy Modes Selection Overlay */}
-                    {showModesModal && (
-                        <View style={[StyleSheet.absoluteFillObject, styles.modalOverlay]}>
-                            <View style={styles.modalCard}>
-                                <Text style={styles.modalTitle}>Batch Import Successful</Text>
-                                <Text style={styles.modalSubtitle}>{importSummaryText}</Text>
-                                <Text style={styles.selectHeader}>Select Therapy Modes to Include in PDF Summary:</Text>
-                                <ScrollView style={{ maxHeight: 200, marginBottom: 15 }}>
-                                    {availableModes.map((mode, idx) => (
-                                        <View key={idx} style={styles.modeItem}>
-                                            <Text style={styles.modeLabel}>{mode}</Text>
-                                            <Switch
-                                                value={selectedModes.includes(mode)}
-                                                onValueChange={() => {
-                                                    setSelectedModes(prev =>
-                                                        prev.includes(mode)
-                                                            ? prev.filter(m => m !== mode)
-                                                            : [...prev, mode]
-                                                    );
-                                                }}
-                                            />
-                                        </View>
-                                    ))}
-                                </ScrollView>
-                                <TouchableOpacity 
-                                    style={styles.confirmButton} 
-                                    onPress={async () => {
-                                        try {
-                                            // Format selected modes as JSON/String to store or pass, but navigate to dashboard directly.
-                                            // Update database patient/logs preference with selected modes if necessary, or pass via state.
-                                            console.log('Selected modes to save:', selectedModes);
-                                            
-                                            // Navigate directly to Dashboard
-                                            setShowModesModal(false);
-                                            navigation.navigate('MainTabs');
-                                        } catch (err) {
-                                            console.error('Error in saving selected modes:', err);
-                                            setShowModesModal(false);
-                                            navigation.navigate('MainTabs');
-                                        }
-                                    }}
-                                >
-                                    <Text style={styles.confirmButtonText}>Save & Go to Dashboard</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
+
 
                     <TouchableOpacity style={styles.helpLink}>
                         <Text style={styles.helpText}>Need help finding your log file?</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+
+            {/* Therapy Modes Selection Overlay */}
+            <Modal
+                visible={showModesModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowModesModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>Batch Import Successful</Text>
+                        <Text style={styles.modalSubtitle}>{importSummaryText}</Text>
+                        <Text style={styles.selectHeader}>Select Therapy Modes to Include in PDF Summary:</Text>
+                        <ScrollView style={{ maxHeight: 200, marginBottom: 15 }}>
+                            {availableModes.map((mode, idx) => (
+                                <View key={idx} style={styles.modeItem}>
+                                    <Text style={styles.modeLabel}>{mode}</Text>
+                                    <Switch
+                                        value={selectedModes.includes(mode)}
+                                        onValueChange={() => {
+                                            setSelectedModes(prev =>
+                                                prev.includes(mode)
+                                                    ? prev.filter(m => m !== mode)
+                                                    : [...prev, mode]
+                                            );
+                                        }}
+                                    />
+                                </View>
+                            ))}
+                        </ScrollView>
+                        <TouchableOpacity 
+                            style={styles.confirmButton} 
+                            onPress={async () => {
+                                try {
+                                    console.log('Selected modes to save:', selectedModes);
+                                    setShowModesModal(false);
+                                    navigation.navigate('Home');
+                                } catch (err) {
+                                    console.error('Error in saving selected modes:', err);
+                                    setShowModesModal(false);
+                                    navigation.navigate('Home');
+                                }
+                            }}
+                        >
+                            <Text style={styles.confirmButtonText}>Save & Go to Dashboard</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -272,17 +274,19 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
+        justifyContent: 'center',
     },
     content: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         padding: Spacing.l,
+        marginBottom: Spacing.l,
     },
     iconCircle: {
-        width: SCREEN_WIDTH * 0.35,
-        height: SCREEN_WIDTH * 0.35,
-        borderRadius: (SCREEN_WIDTH * 0.35) / 2,
+        width: 140,
+        height: 140,
+        borderRadius: 70,
         backgroundColor: Colors.surface, // Green tint
         justifyContent: 'center',
         alignItems: 'center',
@@ -355,15 +359,10 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     modalOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 9999,
         padding: 20,
     },
     modalCard: {

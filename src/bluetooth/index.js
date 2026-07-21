@@ -10,5 +10,6 @@ export {
     syncLogsFromESP32,
     registerDisconnectCallback,
     activeDevice,
-    sendWifiCredentials
+    sendWifiCredentials,
+    cancelBluetoothConnection
 } from './ESP32BluetoothService';

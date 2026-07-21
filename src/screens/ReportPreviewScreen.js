@@ -38,61 +38,14 @@ import { ENDPOINTS } from '../api/apiConfig';
 const { width } = Dimensions.get('window');
 
 // New Component to Handle the Dummy API Call for PDF Data Sync
-const CloudSyncButton = ({ logs, patientData, userData, token }) => {
-  const [syncing, setSyncing] = React.useState(false);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      // As per requirements: user details, main app user name, full total days data
-      const payload = {
-        app_user_name: userData?.name || 'Unknown',
-        app_user_email: userData?.email || '',
-        patient_details: patientData,
-        total_days: logs.length,
-        clinical_logs: logs,
-      };
-
-      console.log('========== DUMMY API PDF DATA SYNC ==========');
-      console.log(JSON.stringify(payload, null, 2));
-      console.log('=============================================');
-
-      // Dummy Endpoint Call
-      const response = await fetch(`${ENDPOINTS.SYNC_PDF_DATA}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('API Response for pdf data:', result);
-        Alert.alert('Synced', 'Data synced to database successfully!');
-      } else {
-        console.log('API returned error, but data is logged to console.');
-        Alert.alert('Dummy API Called', 'Data payload logged to console.');
-      }
-    } catch (error) {
-      console.error('API Error:', error);
-      Alert.alert(
-        'Dummy API Called',
-        'Network error. Payload logged to console.',
-      );
-    } finally {
-      setSyncing(false);
-    }
-  };
-
+const CloudSyncButton = ({ onSync, syncing }) => {
   return (
     <TouchableOpacity
       style={[
         styles.previewDownloadBtn,
         { backgroundColor: '#10B981', flex: 1 },
       ]}
-      onPress={handleSync}
+      onPress={onSync}
       disabled={syncing}
     >
       {syncing ? (
@@ -117,6 +70,7 @@ const ReportPreviewScreen = () => {
   const [doctor, setDoctor] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewPatientData, setPreviewPatientData] = useState(null);
   const [capturedImages, setCapturedImages] = useState({
@@ -135,6 +89,7 @@ const ReportPreviewScreen = () => {
   const leakMiniChartRef = useRef(null);
 
   // Doctor/Patient info-form state
+  const [isSyncing, setIsSyncing] = useState(false);
   const [showDoctorModal, setShowDoctorModal] = useState(false);
   const [tempPatientInfo, setTempPatientInfo] = useState({
     patient_custom_id: '',
@@ -531,7 +486,7 @@ const ReportPreviewScreen = () => {
                 ${
                   showCpap
                     ? `
-                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #F0FDF4 0%, #ffffff 100%); border: 1px solid #10B981; border-radius: 12px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.1);">
+                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #F0FDF4 0%, #ffffff 100%); border: 1px solid #10B981; border-radius: 12px; padding: 12px; box-shadow: none;">
                     <div style="font-weight: 800; color: #065F46; font-size: 13px; letter-spacing: 0.5px; border-bottom: 1px solid #D1FAE5; padding-bottom: 6px; margin-bottom: 8px;">CPAP Mode</div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 10px; color: #64748B;">Avg Usage</span>
@@ -577,7 +532,7 @@ const ReportPreviewScreen = () => {
                 ${
                   showApap
                     ? `
-                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #F5F3FF 0%, #ffffff 100%); border: 1px solid #8B5CF6; border-radius: 12px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.1);">
+                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #F5F3FF 0%, #ffffff 100%); border: 1px solid #8B5CF6; border-radius: 12px; padding: 12px; box-shadow: none;">
                     <div style="font-weight: 800; color: #4C1D95; font-size: 13px; letter-spacing: 0.5px; border-bottom: 1px solid #EDE9FE; padding-bottom: 6px; margin-bottom: 8px;">APAP Mode</div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 10px; color: #64748B;">Avg Usage</span>
@@ -637,7 +592,7 @@ const ReportPreviewScreen = () => {
                 ${
                   showS
                     ? `
-                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #EFF6FF 0%, #ffffff 100%); border: 1px solid #3B82F6; border-radius: 12px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);">
+                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #EFF6FF 0%, #ffffff 100%); border: 1px solid #3B82F6; border-radius: 12px; padding: 12px; box-shadow: none;">
                     <div style="font-weight: 800; color: #1E3A8A; font-size: 13px; letter-spacing: 0.5px; border-bottom: 1px solid #DBEAFE; padding-bottom: 6px; margin-bottom: 8px;">S Mode</div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 10px; color: #64748B;">Avg Usage</span>
@@ -687,7 +642,7 @@ const ReportPreviewScreen = () => {
                 ${
                   showT
                     ? `
-                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #FFF7ED 0%, #ffffff 100%); border: 1px solid #F97316; border-radius: 12px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.1);">
+                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #FFF7ED 0%, #ffffff 100%); border: 1px solid #F97316; border-radius: 12px; padding: 12px; box-shadow: none;">
                     <div style="font-weight: 800; color: #7C2D12; font-size: 13px; letter-spacing: 0.5px; border-bottom: 1px solid #FFEDD5; padding-bottom: 6px; margin-bottom: 8px;">T Mode</div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 10px; color: #64748B;">Avg Usage</span>
@@ -732,7 +687,7 @@ const ReportPreviewScreen = () => {
                 ${
                   showSt
                     ? `
-                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #FEF2F2 0%, #ffffff 100%); border: 1px solid #EF4444; border-radius: 12px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.1);">
+                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #FEF2F2 0%, #ffffff 100%); border: 1px solid #EF4444; border-radius: 12px; padding: 12px; box-shadow: none;">
                     <div style="font-weight: 800; color: #7F1D1D; font-size: 13px; letter-spacing: 0.5px; border-bottom: 1px solid #FEE2E2; padding-bottom: 6px; margin-bottom: 8px;">ST Mode</div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 10px; color: #64748B;">Avg Usage</span>
@@ -785,7 +740,7 @@ const ReportPreviewScreen = () => {
                 ${
                   showVaps
                     ? `
-                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #ECFDF5 0%, #ffffff 100%); border: 1px solid #059669; border-radius: 12px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.1);">
+                <div style="flex: 1; min-width: 30%; max-width: 32%; background: linear-gradient(135deg, #ECFDF5 0%, #ffffff 100%); border: 1px solid #059669; border-radius: 12px; padding: 12px; box-shadow: none;">
                     <div style="font-weight: 800; color: #064E3B; font-size: 13px; letter-spacing: 0.5px; border-bottom: 1px solid #D1FAE5; padding-bottom: 6px; margin-bottom: 8px;">VAPS Mode</div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 10px; color: #64748B;">Avg Usage</span>
@@ -906,10 +861,10 @@ const ReportPreviewScreen = () => {
       })
       .join('');
 
-    const graphSection = (title, imgBase64) => {
+    const graphSection = (title, imgBase64, extraStyle = '') => {
       if (!imgBase64) return '';
       return `
-                <div style="page-break-inside:avoid; margin-bottom:26px; background:#fff; border:1px solid #D1FAE5; border-radius:12px; padding:15px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                <div style="page-break-inside:avoid; margin-bottom:26px; background:#fff; border:1px solid #D1FAE5; border-radius:12px; padding:15px; box-shadow:none; ${extraStyle}">
                     <div style="font-size:13px; font-weight:bold; color:#064E3B; border-left:4px solid #10B981; padding-left:10px; margin-bottom:12px;">${title}</div>
                     <div style="text-align:center;">
                         <img src="data:image/jpeg;base64,${imgBase64}" style="width:100%; max-width:420px; border-radius:6px;" />
@@ -932,7 +887,7 @@ const ReportPreviewScreen = () => {
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;}
 .page1{padding:34px 38px 28px 38px;page-break-after:always;}
-.page2{padding:34px 38px 28px 38px;page-break-after:always;}
+.page2{padding:34px 38px 28px 38px;}
 .page3{padding:34px 38px 28px 38px; height: 1040px; position: relative;}
 .hdr-banner{
     background:#ffffff;border:2px solid #065F46;
@@ -987,17 +942,16 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;backgro
 .doctor-line { display: flex; gap: 20px; align-items: center; padding: 10px 15px; background: #F0FDF4; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #D1FAE5; }
 .header-item { font-size: 11px; color: #444; }
 .sig-area{
-    position:absolute; bottom:-200px; left:38px; right:38px;
     display:flex;justify-content:space-between;align-items:flex-end;
+    margin-top:30px; padding:0 10px;
 }
 .sig-blk{text-align:center;}
 .sig-line{border-top:1px solid #333;width:170px;margin:0 auto 5px auto;}
 .sig-lbl{font-size:10px;color:#333;font-weight:bold;}
 .sig-sub{font-size:9px;color:#90A4AE;margin-top:2px;}
 .footer{
-    position:absolute; bottom:20px; left:38px; right:38px;
     text-align:center;font-size:9px;color:#90A4AE;
-    border-top:1px solid #E3F2FD;padding-top:8px;
+    border-top:1px solid #E3F2FD;padding-top:8px;margin-top:15px;
 }
 </style>
 </head>
@@ -1217,36 +1171,10 @@ margin-bottom:20px;
         ${graphSection('Daily Usage (Hours)', images.usageImg)}
         ${graphSection('Average Flow Rate (L/min)', images.flowImg)}
         ${graphSection('Apnea Events (AHI Index / hr)', images.ahiImg)}
-        ${graphSection('Leak Rate (L/min)', images.leakImg)}
-    </div>
-</div>
-
-<!-- ══════════════ PAGE 3 — 9-Day Clinical Pressure Analysis ══════════════ -->
-<div class="page3" style="height:1040px; position:relative;">
-    <div class="p2hdr">
-        <h2>&#x1F4C8; 9-Day Clinical Pressure Analysis</h2>
-        <span>Patient: ${
-          patientDataToUse?.name || '-'
-        } &nbsp;|&nbsp; ${dateStr}</span>
+        ${graphSection('Leak Rate (L/min)', images.leakImg, 'margin-top: 100px;')}
     </div>
 
-    <div style="margin-top:10px; background:#fff; border:1px solid #edf2f7; border-radius:12px; padding:15px; text-align:center;">
-        <div style="font-size:11px; font-weight:bold; color:#1e293b; border-left:4px solid #3b82f6; padding-left:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="text-align:left;">Daily Pressure Waveforms & Profiles</div>
-            <div style="font-size:8px; font-weight:normal; color:#64748b;">
-                <span style="color:#1E88E5">●</span> Set Pressure &nbsp; 
-                <span style="color:#EF4444">●</span> Max &nbsp;
-                <span style="color:#14B8A6">●</span> Min
-            </div>
-        </div>
-        ${
-          images.pressureGridImg
-            ? `<img src="data:image/jpeg;base64,${images.pressureGridImg}" style="width:100%; max-width:100%; border-radius:6px;" />`
-            : ''
-        }
-    </div>
-
-    <!-- Doctor Signature — POSITIVELY AT THE END -->
+    <!-- Signature Section — right after last graph -->
     <div class="sig-area">
         <div class="sig-blk">
             <div class="sig-line"></div>
@@ -1282,6 +1210,34 @@ margin-bottom:20px;
     </div>
 </div>
 
+<!-- ══════════════ PAGE 3 — 9-Day Clinical Pressure Analysis (HIDDEN) ══════════════ -->
+<!--<div class="page3">
+    <div class="p2hdr">
+        <h2>&#x1F4C8; 9-Day Clinical Pressure Analysis</h2>
+        <span>Patient: ${
+          patientDataToUse?.name || '-'
+        } &nbsp;|&nbsp; ${dateStr}</span>
+    </div>
+
+    <div style="margin-top:10px; background:#fff; border:1px solid #edf2f7; border-radius:12px; padding:15px; text-align:center;">
+        <div style="font-size:11px; font-weight:bold; color:#1e293b; border-left:4px solid #3b82f6; padding-left:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="text-align:left;">Daily Pressure Waveforms &amp; Profiles</div>
+            <div style="font-size:8px; font-weight:normal; color:#64748b;">
+                <span style="color:#1E88E5">●</span> Set Pressure &nbsp; 
+                <span style="color:#EF4444">●</span> Max &nbsp;
+                <span style="color:#14B8A6">●</span> Min
+            </div>
+        </div>
+        ${
+          images.pressureGridImg
+            ? `<img src="data:image/jpeg;base64,${images.pressureGridImg}" style="width:100%; max-width:100%; border-radius:6px;" />`
+            : ''
+        }
+    </div>
+</div>-->
+
+
+
 </body>
 </html>`;
   };
@@ -1313,13 +1269,13 @@ margin-bottom:20px;
     }
 
     setTempPatientInfo({
-      patient_custom_id: patient?.patient_custom_id || '',
-      name: patient?.name || '',
-      age: patient?.age?.toString() || '',
-      gender: patient?.gender || 'Male',
-      dob: patient?.dob || '',
-      phone: patient?.phone || '',
-      email: patient?.email || '',
+      patient_custom_id: patient?.patient_custom_id || userData?.patient_custom_id || '',
+      name: patient?.name || userData?.name || doctor?.name || '',
+      age: patient?.age?.toString() || userData?.age?.toString() || '',
+      gender: patient?.gender || userData?.gender || 'Male',
+      dob: patient?.dob || userData?.dob || '',
+      phone: patient?.phone?.toString() || userData?.phone?.toString() || doctor?.phone?.toString() || '+91 9876543210',
+      email: patient?.email || userData?.email || doctor?.email || '',
       device_model: patient?.device_model || '',
       machine_serial: patient?.machine_serial || '',
     });
@@ -1332,23 +1288,88 @@ margin-bottom:20px;
       Alert.alert('Required', 'Please enter at least the patient name.');
       return;
     }
-    setShowDoctorModal(false);
 
-    // Start capturing charts for preview
-    setIsCapturing(true);
+    setIsPreviewLoading(true);
+
+    setTimeout(async () => {
+      // Start capturing charts for preview
+      setIsCapturing(true);
+      try {
+        const images = await captureAllCharts();
+        setCapturedImages(images);
+        setPreviewPatientData({ ...tempPatientInfo });
+        setShowDoctorModal(false);
+        setShowPreviewModal(true);
+      } catch (error) {
+        console.error('Error capturing charts for preview:', error);
+        Alert.alert(
+          'Preview Error',
+          'Could not generate report preview. Please try again.',
+        );
+      } finally {
+        setIsCapturing(false);
+        setIsPreviewLoading(false);
+      }
+    }, 100);
+  };
+
+
+  
+  const handleSyncWithPDF = async () => {
+    setIsSyncing(true);
     try {
-      const images = await captureAllCharts();
-      setCapturedImages(images);
-      setPreviewPatientData({ ...tempPatientInfo });
-      setShowPreviewModal(true);
+      const images = capturedImages;
+      const logoBase64 = await getLogoBase64();
+      const htmlContent = buildReportHTML(
+        previewPatientData,
+        images,
+        logoBase64,
+      );
+
+      console.log('Generating PDF for sync...');
+      const results = await createPDF({
+        html: htmlContent,
+        fileName: `Airsine_Report_Sync_${Date.now()}`,
+        directory: 'Documents',
+        base64: true,
+      });
+
+      if (!results || !results.base64) {
+        throw new Error('PDF creation returned no base64 data.');
+      }
+
+      const payload = {
+        app_user_name: userData?.name || 'Unknown',
+        app_user_email: userData?.email || '',
+        patient_details: previewPatientData,
+        total_days: fullLogs.length,
+        clinical_logs: [],
+        pdf_base64: results.base64,
+      };
+
+      const response = await fetch(`${ENDPOINTS.SYNC_PDF_DATA}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert('Synced', 'Data and PDF synced to database successfully!');
+      } else {
+        Alert.alert('Error', `Failed to sync PDF to server.${response.status}`);
+      }
     } catch (error) {
-      console.error('Error capturing charts for preview:', error);
+      console.error('API Error:', error);
       Alert.alert(
-        'Preview Error',
-        'Could not generate report preview. Please try again.',
+        'Error',
+        'Network error. Could not sync data.',
       );
     } finally {
-      setIsCapturing(false);
+      setIsSyncing(false);
     }
   };
 
@@ -1366,7 +1387,7 @@ margin-bottom:20px;
     setGenerating(true);
 
     try {
-      const images = await captureAllCharts();
+      const images = capturedImages;
       const logoBase64 = await getLogoBase64();
       const htmlContent = buildReportHTML(
         previewPatientData,
@@ -1466,7 +1487,7 @@ margin-bottom:20px;
   const handleShareFromPreview = async () => {
     setIsCapturing(true);
     try {
-      const images = await captureAllCharts();
+      const images = capturedImages;
       const logoBase64 = await getLogoBase64();
       const htmlContent = buildReportHTML(previewPatientData, images, logoBase64);
 
@@ -1556,7 +1577,8 @@ margin-bottom:20px;
       {/* Hidden charts container - visible only when capturing */}
       {(isCapturing || generating) && (
         <View style={styles.hiddenChartContainer} collapsable={false}>
-          {/* 1. 9-Day Pressure Profile Grid */}
+          {/* 1. 9-Day Pressure Profile Grid — COMMENTED OUT */}
+          {false && (
           <ViewShot
             ref={pressureGridRef}
             options={{ format: 'png', quality: 0.7, result: 'base64' }}
@@ -1909,6 +1931,7 @@ margin-bottom:20px;
               })}
             </View>
           </ViewShot>
+          )}
 
           {/* Usage Chart (All Selected Days) */}
           <ViewShot
@@ -2170,10 +2193,8 @@ margin-bottom:20px;
             </TouchableOpacity>
 
             <CloudSyncButton
-              logs={fullLogs}
-              patientData={previewPatientData}
-              userData={userData}
-              token={token}
+              onSync={handleSyncWithPDF}
+              syncing={isSyncing}
             />
 
             <TouchableOpacity
@@ -2298,7 +2319,7 @@ margin-bottom:20px;
                     style={styles.inputField}
                     placeholder="e.g. +91 9876..."
                     keyboardType="phone-pad"
-                    value={tempPatientInfo.phone}
+                    value={String(tempPatientInfo?.phone || '')}
                     onChangeText={text =>
                       setTempPatientInfo({ ...tempPatientInfo, phone: text })
                     }
@@ -2328,8 +2349,13 @@ margin-bottom:20px;
                 <TouchableOpacity
                   style={styles.modalSubmitBtn}
                   onPress={handleDoctorFormSubmit}
+                  disabled={isPreviewLoading}
                 >
-                  <Text style={styles.modalSubmitText}>Preview Report</Text>
+                  {isPreviewLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Preview Report</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>

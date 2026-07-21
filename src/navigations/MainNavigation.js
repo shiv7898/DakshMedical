@@ -7,7 +7,6 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors } from '../styles/theme';
 
 import LoginScreen from '../screens/LoginScreen';
-import MachineSelectionScreen from '../screens/MachineSelectionScreen';
 import ImportLogScreen from '../screens/ImportLogScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import ProductCatalogScreen from '../screens/ProductCatalogScreen';
@@ -231,7 +230,7 @@ const MainTabs = () => {
             />
             <Tab.Screen
                 name="Upload"
-                component={MachineSelectionScreen}
+                component={ImportLogScreen}
                 options={{
                     tabBarButton: (props) => (
                         <TouchableOpacity
@@ -353,7 +352,6 @@ const MainNavigation = () => {
             <Stack.Screen name="MainTabs" component={AppNavigator} />
             <Stack.Screen name="ProductCatalog" component={ProductCatalogScreen} />
 
-            <Stack.Screen name="MachineSelection" component={MachineSelectionScreen} />
             <Stack.Screen name="ImportLog" component={ImportLogScreen} />
             <Stack.Screen name="Graphs" component={GraphScreen} />
             <Stack.Screen name="UpdateMachineSetting" component={UpdateMachineSetting} />
