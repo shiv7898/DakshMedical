@@ -214,7 +214,10 @@ const ProductCard = memo(({ item, index, onPress }) => (
         </View>
       </View>
       <View style={styles.cardInfo}>
-        <Text style={styles.productTypeTag}>{item.type}</Text>
+        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+          <Text style={styles.productTypeTag}>{item.type}</Text>
+          <Text style={{fontSize: 10, color: '#64748B', fontWeight: 'bold'}}>{item.model_name}</Text>
+        </View>
         <Text style={styles.productNameText} numberOfLines={2}>
           {item.name}
         </Text>
@@ -281,12 +284,15 @@ const DistributorProductCatalog = ({ navigation }) => {
           id: item.id.toString(),
           name: item.product_name,
           type: item.product_type,
-          price: item.unit_price,
-          mrp: item.unit_mrp,
+          price: item.selling_price || item.unit_price,
+          mrp: item.unit_mrp || item.unit_price,
           discount: `${item.discount}% OFF`,
           isNew: true, // We can refine this later
           image: item.image_url,
-          description: item.description
+          description: item.description,
+          model_name: item.model_name || 'Generic',
+          referral_discount: item.referral_discount || 0,
+          tax_gst: item.tax_gst || 0,
         }));
         setAllProducts(mappedProducts);
         setFilteredProducts(mappedProducts);
@@ -375,7 +381,7 @@ const DistributorProductCatalog = ({ navigation }) => {
       setIsVerifyingReferral(true);
       setReferralStatus({ success: null, error: null });
 
-      const response = await fetch(`${BASE_URL}/orders/verify-referral/${referralInput.trim()}`, {
+      const response = await fetch(`${ENDPOINTS.VERIFY_REFERRAL}${referralInput.trim()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -385,8 +391,8 @@ const DistributorProductCatalog = ({ navigation }) => {
 
       if (response.ok) {
         setAppliedReferral(referralInput.trim());
-        setReferralDiscountPercent(result.discount_percent);
-        setReferralStatus({ success: `Applied! ${result.discount_percent}% discount active 🎉`, error: null });
+        setReferralDiscountPercent(selectedProduct?.referral_discount || 10);
+        setReferralStatus({ success: `Applied! Discount active 🎉`, error: null });
       } else {
         setReferralStatus({ success: null, error: result.detail || 'Invalid referral code' });
         setAppliedReferral(null);
@@ -477,7 +483,9 @@ const DistributorProductCatalog = ({ navigation }) => {
 
   const subtotal = selectedProduct ? selectedProduct.price * orderQuantity : 0;
   const referralDiscountAmount = subtotal * (referralDiscountPercent / 100);
-  const totalPayable = subtotal - referralDiscountAmount;
+  const amountBeforeTax = subtotal - referralDiscountAmount;
+  const gstAmount = selectedProduct ? amountBeforeTax * (selectedProduct.tax_gst / 100) : 0;
+  const totalPayable = amountBeforeTax + gstAmount;
 
   return (
     <SafeAreaView style={styles.mainContainer}>
@@ -614,7 +622,7 @@ const DistributorProductCatalog = ({ navigation }) => {
                     />
                   )}
                   <View style={styles.modalProductDetails}>
-                    <Text style={styles.modalProductType}>{selectedProduct.type}</Text>
+                    <Text style={styles.modalProductType}>{selectedProduct.type} • {selectedProduct.model_name}</Text>
                     <Text style={styles.modalProductName} numberOfLines={1}>{selectedProduct.name}</Text>
                     <View style={styles.modalQtyRow}>
                       <Text style={styles.modalProductPrice}>
@@ -779,6 +787,13 @@ const DistributorProductCatalog = ({ navigation }) => {
                       </Text>
                     </View>
                   )}
+
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>GST ({selectedProduct?.tax_gst || 0}%)</Text>
+                    <Text style={styles.summaryValue}>
+                      {'\u20B9'}{gstAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </Text>
+                  </View>
 
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Shipping & Handling</Text>
